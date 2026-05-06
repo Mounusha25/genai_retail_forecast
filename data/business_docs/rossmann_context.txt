@@ -1,0 +1,139 @@
+Rossmann Store Sales — Business Context
+========================================
+
+COMPANY OVERVIEW
+----------------
+Rossmann is one of Europe's largest drug store chains, operating over 3,000 stores across
+Germany, Poland, Hungary, Czech Republic, Turkey, and Albania. Each store sells a wide
+range of personal care, beauty, household, and wellness products. The company competes
+closely with dm-drogerie markt and focuses on value pricing with frequent promotions.
+
+STORE TYPES
+-----------
+Rossmann operates four distinct store formats, each with different characteristics:
+
+Type A — Standard stores: The most common format (~60% of stores). Mid-size urban and
+suburban locations with typical weekend and holiday footfall patterns. Average daily
+sales range between 4,000 and 8,000 units depending on season.
+
+Type B — Community stores: The smallest format, typically in smaller towns or residential
+neighbourhoods. They show weaker promo uplift because the catchment area is smaller. Average
+daily sales are 20–35% lower than Type A.
+
+Type C — Larger stores: High-traffic locations, often near transport hubs or shopping
+centres. They respond strongly to promotions and have above-average weekend-to-weekday
+ratios. Average daily sales are 15–25% above Type A.
+
+Type D — Flagship / destination stores: The largest format, typically in city centres.
+Very high baseline sales and the strongest promo response in the chain. Weekend uplift
+can be 50–80% above weekday levels.
+
+PROMOTIONAL MECHANICS
+---------------------
+Rossmann runs two types of promotions that meaningfully lift sales:
+
+Promo (standard): A store-level weekly promotional event with discounts on selected
+categories. Standard promos lift unit sales by an average of 20–30% versus non-promo
+weeks across the chain. However, the lift is highest for Type C and D stores (30–40%)
+and lower for Type B (10–15%). Promo periods also shift purchasing earlier in the week,
+causing Monday and Tuesday to outperform Friday–Saturday during active promo weeks.
+
+Promo2 (loyalty programme): A longer-running, subscription-style promotional scheme
+that runs for consecutive intervals. Stores enrolled in Promo2 show a sustained 5–10%
+baseline lift over non-enrolled stores but less acute weekly spikes. Promo2 enrollment
+is voluntary and varies by region.
+
+SEASONALITY AND HOLIDAY EFFECTS
+--------------------------------
+Rossmann sales follow strong predictable seasonal patterns:
+
+December: The peak trading month. Sales typically run 35–50% above the annual daily
+average due to gift products, advent calendars, and seasonal health items. The last
+two weeks before Christmas are the highest-volume period. Categories driving this peak
+include beauty gifts, candles, skincare sets, and vitamins.
+
+January: The sharpest trough of the year. Post-holiday, sales drop to 15–25% below the
+annual average. Consumers are conservative with spending. Store managers should plan
+reduced stock orders for the first three weeks of January.
+
+Easter: Germany observes Good Friday and Easter Monday as public holidays. Stores closed
+on these days show zero sales. The week before Easter sees a compensatory uplift of
+10–15% as consumers stock up.
+
+Summer (July–August): A moderate trough, particularly for indoor-use products. Sun care,
+insect repellent, and travel-size products partially offset declines in other categories.
+Overall sales 5–10% below spring average.
+
+Public holidays (DE): Stores in German states are subject to state-specific holiday laws.
+On public holidays stores must close. The day before a holiday typically shows a 15–20%
+uplift (pre-holiday stocking effect).
+
+Day-of-Week Effects
+-------------------
+Monday: Slightly below weekly average — consumers are back at work after weekend.
+Tuesday–Thursday: The core trading days. Stable and predictable.
+Friday: The strongest day of the week for most store types. End-of-week top-up shopping
+and start-of-weekend stocking drive 15–25% above the weekly average.
+Saturday: High for Type C and D stores (near Type A Friday levels). Moderate for Type A
+and B as fewer consumers are in shopping destinations.
+Sunday: Almost always zero — German law requires stores to be closed on Sundays except
+in designated shopping areas and public transport hubs.
+
+COMPETITIVE LANDSCAPE
+---------------------
+dm-drogerie markt is the primary competitor. When dm opens a new store within 500m of
+an existing Rossmann store, affected Rossmann stores typically see a 3–8% permanent
+baseline sales reduction lasting 6–12 months. Competitive effects are not directly
+observable in the sales data but should be considered when forecasts show sustained
+unexplained downward drift.
+
+KEY PRODUCT CATEGORIES AND MARGINS
+------------------------------------
+Personal care (shampoo, shower gel, deodorant): ~28% of revenue. Low margin (~18%),
+high volume. Very promo-sensitive.
+
+Beauty and skin care: ~22% of revenue. Higher margin (~35%). Seasonal peak in December
+and around Valentine's Day (mid-February). Responds well to Promo2.
+
+Health and pharmacy (OTC vitamins, cold remedies): ~18% of revenue. Margin ~25%.
+January through March is the peak cold season with a 20–30% lift in this category.
+
+Household and cleaning: ~15% of revenue. Low margin (~14%). Spring is the peak (March–
+May) due to seasonal cleaning behaviour in Germany.
+
+Baby and child care: ~10% of revenue. Stable demand, less cyclical, low promo response.
+
+Other / seasonal: ~7% of revenue. Highly variable depending on season (e.g., sun care in
+summer, Christmas decorations in Q4).
+
+FORECASTING NOTES FOR THE AI MODEL
+------------------------------------
+1. Zero-sales days are almost always caused by store closures (holidays, Sunday) and
+   should not be treated as anomalies or imputed — they are structural zeros.
+
+2. Refurbishment / temporary closure: Some stores have extended zero-sales streaks
+   (1–4 weeks) due to renovation. These should be excluded from training windows
+   or flagged as anomalies.
+
+3. New store ramp-up: Stores in their first 6 months of operation show a ramp-up
+   pattern with steadily increasing sales week-over-week. ARIMA models should be
+   trained only on post-ramp data (month 7 onward) for such stores.
+
+4. The ARIMA_PLUS model in BigQuery captures trend, seasonality, and holiday effects
+   automatically. Supply any additional context (promo flags, store type) as regressors
+   in the TRANSFORM clause for best results.
+
+5. Confidence intervals (80% CI) should be communicated as plausible ranges, not hard
+   bounds. Actual sales falling outside the CI in consecutive weeks is a signal to
+   investigate operational causes (e.g., stock-outs, competitor actions).
+
+6. Executive summaries should avoid alarming language for minor deviations (< 5% off
+   forecast). Reserve cautionary language for sustained trends or deviations > 15%.
+
+DATA DICTIONARY (rossmann_cleaned.csv)
+----------------------------------------
+date         : ISO 8601 date (YYYY-MM-DD)
+product_id   : Store identifier in the format STORE_XXXX (e.g., STORE_0001)
+store_id     : Store type code — a, b, c, or d (mapped from StoreType in raw data)
+units_sold   : Integer count of items sold that day (0 on closed days)
+revenue      : Total revenue in EUR for that day (0 on closed days)

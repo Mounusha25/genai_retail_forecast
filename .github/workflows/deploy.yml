@@ -1,0 +1,61 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+
+env:
+  PROJECT_ID:  ${{ vars.GCP_PROJECT_ID }}
+  REGION:      us-central1
+  IMAGE:       gcr.io/${{ vars.GCP_PROJECT_ID }}/retail-forecasting-api
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # Workload Identity Federation
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP (Workload Identity)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account:            ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker --quiet
+
+      - name: Build & push Docker image
+        run: |
+          docker build --target runtime \
+            --build-arg BUILD_SHA=${{ github.sha }} \
+            -t "$IMAGE:${{ github.sha }}" \
+            -t "$IMAGE:latest" .
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy retail-forecasting-api \
+            --image   "$IMAGE:${{ github.sha }}" \
+            --region  "$REGION" \
+            --platform managed \
+            --no-allow-unauthenticated \
+            --memory  2Gi \
+            --cpu     2 \
+            --max-instances 10 \
+            --set-secrets \
+              "DATABASE_URL=db-url:latest,\
+               OPENAI_API_KEY=openai-key:latest,\
+               SCHEDULER_SECRET=sched-secret:latest,\
+               GOOGLE_CLOUD_PROJECT=gcp-project:latest,\
+               GCS_BUCKET=gcs-bucket:latest" \
+            --set-env-vars "ENVIRONMENT=production,LOG_LEVEL=INFO"

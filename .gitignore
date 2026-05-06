@@ -1,0 +1,46 @@
+# ── Python ──────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+*.egg
+
+# ── Testing / coverage ──────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# ── Ruff / mypy ──────────────────────────────────────────────────
+.ruff_cache/
+.mypy_cache/
+
+# ── Environment ──────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── GCP credentials (never commit) ──────────────────────────────
+*.json
+service-account*.json
+gcloud-*.json
+
+# ── FAISS index (generated artefact) ────────────────────────────
+data/faiss_index/
+
+# ── macOS ────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+
+# ── IDEs ─────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo

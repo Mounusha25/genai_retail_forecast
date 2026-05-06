@@ -1,0 +1,1581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GenAI Retail Forecasting — Architecture</title>
+  <style>
+    /* ── View-transition animations ─────────────────────────── */
+    @supports (view-transition-name: none) {
+      ::view-transition-group(*),
+      ::view-transition-old(*),
+      ::view-transition-new(*) {
+        animation-duration: 0.25s;
+        animation-timing-function: cubic-bezier(0.19, 1, 0.22, 1);
+      }
+    }
+
+    /* ── Design tokens ───────────────────────────────────────── */
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #1c2330;
+      --border:    #30363d;
+      --accent:    #58a6ff;
+      --accent2:   #3fb950;
+      --accent3:   #d2a8ff;
+      --accent4:   #ff9f43;
+      --accent5:   #f85149;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --code-bg:   #0d1117;
+      --radius:    10px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Page header ─────────────────────────────────────────── */
+    header {
+      background: linear-gradient(135deg, #0d1117 0%, #1a1f2e 50%, #0d1117 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 32px 40px 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    header::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 60% 80% at 70% 50%, rgba(88,166,255,0.07) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    header h1 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #58a6ff, #a5d6ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    header p {
+      color: var(--muted);
+      margin-top: 6px;
+      font-size: 13px;
+      max-width: 660px;
+    }
+    .badges {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+    .badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+      letter-spacing: 0.3px;
+    }
+    .badge-blue   { background: rgba(88,166,255,0.15); color: #58a6ff; border: 1px solid rgba(88,166,255,0.3); }
+    .badge-green  { background: rgba(63,185,80,0.15);  color: #3fb950; border: 1px solid rgba(63,185,80,0.3); }
+    .badge-purple { background: rgba(210,168,255,0.15);color: #d2a8ff; border: 1px solid rgba(210,168,255,0.3); }
+    .badge-orange { background: rgba(255,159,67,0.15); color: #ff9f43; border: 1px solid rgba(255,159,67,0.3); }
+
+    /* ── Main layout ─────────────────────────────────────────── */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    /* ── Architecture diagram ────────────────────────────────── */
+    .arch-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      margin-bottom: 28px;
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-title::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Pipeline diagram */
+    .pipeline {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      flex-wrap: wrap;
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+    .pipe-node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+      min-width: 96px;
+    }
+    .pipe-node:hover { transform: translateY(-3px); }
+    .pipe-node.active .node-box {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(88,166,255,0.2), 0 4px 16px rgba(88,166,255,0.15);
+    }
+    .node-box {
+      width: 78px;
+      height: 78px;
+      border-radius: 14px;
+      border: 2px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .node-box::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: 0.12;
+      border-radius: inherit;
+    }
+    .node-gcs    .node-box::before { background: #4285f4; }
+    .node-beam   .node-box::before { background: #ea8c00; }
+    .node-bq     .node-box::before { background: #4285f4; }
+    .node-bqml   .node-box::before { background: #3fb950; }
+    .node-embed  .node-box::before { background: #d2a8ff; }
+    .node-rag    .node-box::before { background: #ff79c6; }
+    .node-gpt    .node-box::before { background: #74b9ff; }
+    .node-pg     .node-box::before { background: #00b894; }
+    .node-api    .node-box::before { background: #58a6ff; }
+    .node-sched  .node-box::before { background: #fd79a8; }
+
+    .node-icon { font-size: 26px; }
+    .node-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.3;
+    }
+    .pipe-node.active .node-label { color: var(--accent); }
+
+    .pipe-arrow {
+      color: var(--muted);
+      font-size: 18px;
+      margin: 0 2px;
+      padding-bottom: 20px;
+      flex-shrink: 0;
+    }
+
+    .pipeline-row {
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+    .pipeline-branch {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .branch-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--accent3);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    /* ── Tabs ────────────────────────────────────────────────── */
+    .tabs-wrapper {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .tab-nav {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tab-nav::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 14px 20px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .tab-num {
+      background: var(--surface2);
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .tab-btn.active .tab-num {
+      background: rgba(88,166,255,0.2);
+      color: var(--accent);
+    }
+
+    .tab-panel {
+      display: none;
+      padding: 28px;
+      view-transition-name: tab-panel;
+    }
+    .tab-panel.active { display: block; }
+
+    /* ── Step cards ──────────────────────────────────────────── */
+    .step-list { display: flex; flex-direction: column; gap: 16px; }
+    .step-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px 18px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .step-header:hover { background: rgba(255,255,255,0.03); }
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .step-title {
+      font-size: 14px;
+      font-weight: 600;
+      flex: 1;
+    }
+    .step-meta {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: "SF Mono", "Fira Code", monospace;
+    }
+    .step-chevron {
+      color: var(--muted);
+      font-size: 12px;
+      transition: transform 0.2s;
+    }
+    .step-card.open .step-chevron { transform: rotate(90deg); }
+    .step-body {
+      display: none;
+      border-top: 1px solid var(--border);
+      padding: 0;
+    }
+    .step-card.open .step-body { display: block; }
+    .step-desc {
+      padding: 14px 18px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    /* ── Code blocks ─────────────────────────────────────────── */
+    .code-block {
+      position: relative;
+      background: var(--code-bg);
+      border-top: 1px solid var(--border);
+    }
+    .code-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .code-lang {
+      font-size: 11px;
+      font-weight: 600;
+      font-family: "SF Mono", "Fira Code", monospace;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .copy-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+      font-family: inherit;
+    }
+    .copy-btn:hover { color: var(--text); border-color: #484f58; }
+    .copy-btn.copied { color: var(--accent2); border-color: var(--accent2); }
+    pre {
+      margin: 0;
+      padding: 16px;
+      overflow-x: auto;
+      font-size: 12.5px;
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+      line-height: 1.6;
+      tab-size: 2;
+    }
+    code { color: var(--text); }
+
+    /* Syntax colours */
+    .kw  { color: #ff7b72; }
+    .fn  { color: #d2a8ff; }
+    .str { color: #a5d6ff; }
+    .cm  { color: #8b949e; font-style: italic; }
+    .num { color: #79c0ff; }
+    .cls { color: #ffa657; }
+    .var { color: #e6edf3; }
+    .op  { color: #ff7b72; }
+    .dec { color: #79c0ff; }
+
+    /* ── Info callout ────────────────────────────────────────── */
+    .callout {
+      display: flex;
+      gap: 12px;
+      background: rgba(88,166,255,0.06);
+      border: 1px solid rgba(88,166,255,0.25);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 20px;
+    }
+    .callout-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+    .callout-body { font-size: 13px; color: #a5b4c8; line-height: 1.6; }
+    .callout-body strong { color: var(--accent); font-weight: 600; }
+    .callout.tip   { background: rgba(63,185,80,0.06);  border-color: rgba(63,185,80,0.25); }
+    .callout.tip   .callout-body strong { color: var(--accent2); }
+    .callout.warn  { background: rgba(255,159,67,0.06); border-color: rgba(255,159,67,0.25); }
+    .callout.warn  .callout-body strong { color: var(--accent4); }
+
+    /* ── Overview tab layout ─────────────────────────────────── */
+    .overview-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 20px;
+    }
+    @media (max-width: 700px) { .overview-grid { grid-template-columns: 1fr; } }
+    .ov-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px;
+    }
+    .ov-card h3 {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ov-card ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .ov-card ul li {
+      font-size: 12px;
+      color: var(--muted);
+      padding-left: 14px;
+      position: relative;
+    }
+    .ov-card ul li::before {
+      content: "›";
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+    }
+
+    .start-order {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px;
+      margin-top: 16px;
+    }
+    .start-order h3 {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      color: var(--accent4);
+    }
+    .order-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .order-step {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .order-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: rgba(255,159,67,0.15);
+      border: 1px solid rgba(255,159,67,0.4);
+      color: #ff9f43;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .order-text { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+    .order-text strong { color: var(--text); }
+
+    /* ── Responsive ──────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      header { padding: 20px 16px; }
+      .container { padding: 16px 12px; }
+      .tab-btn { padding: 12px 14px; font-size: 12px; }
+      .tab-panel { padding: 16px; }
+    }
+
+    /* ── Scroll reveal ───────────────────────────────────────── */
+    @keyframes fade-up {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .step-card {
+      animation: fade-up 0.3s ease both;
+    }
+    .step-card:nth-child(1) { animation-delay: 0.04s; }
+    .step-card:nth-child(2) { animation-delay: 0.08s; }
+    .step-card:nth-child(3) { animation-delay: 0.12s; }
+    .step-card:nth-child(4) { animation-delay: 0.16s; }
+    .step-card:nth-child(5) { animation-delay: 0.20s; }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────── -->
+<header>
+  <h1>GenAI Retail Forecasting — System Architecture</h1>
+  <p>End-to-end pipeline: GCS → Dataflow/Beam → BigQuery ML → LangChain RAG → GPT-4 → FastAPI</p>
+  <div class="badges">
+    <span class="badge badge-blue">Apache Beam · Dataflow</span>
+    <span class="badge badge-green">BigQuery ML · ARIMA_PLUS</span>
+    <span class="badge badge-purple">LangChain · FAISS · GPT-4</span>
+    <span class="badge badge-orange">FastAPI · PostgreSQL · Cloud Scheduler</span>
+  </div>
+</header>
+
+<!-- ── Container ───────────────────────────────────────────── -->
+<div class="container">
+
+  <!-- Architecture Diagram -->
+  <div class="arch-section">
+    <div class="section-title">Full Pipeline</div>
+
+    <!-- Row 1: Ingestion + Forecasting -->
+    <div style="margin-bottom:16px">
+      <div class="branch-label">Data Layer</div>
+      <div class="pipeline-row">
+        <div class="pipeline">
+          <div class="pipe-node node-gcs" data-tab="1" onclick="activateNodeTab(this,1)">
+            <div class="node-box"><span class="node-icon">🪣</span></div>
+            <span class="node-label">GCS<br>Raw Data</span>
+          </div>
+          <span class="pipe-arrow">→</span>
+          <div class="pipe-node node-beam" data-tab="1" onclick="activateNodeTab(this,1)">
+            <div class="node-box"><span class="node-icon">⚙️</span></div>
+            <span class="node-label">Dataflow<br>Beam ETL</span>
+          </div>
+          <span class="pipe-arrow">→</span>
+          <div class="pipe-node node-bq" data-tab="2" onclick="activateNodeTab(this,2)">
+            <div class="node-box"><span class="node-icon">🗄️</span></div>
+            <span class="node-label">BigQuery<br>Warehouse</span>
+          </div>
+          <span class="pipe-arrow">→</span>
+          <div class="pipe-node node-bqml" data-tab="2" onclick="activateNodeTab(this,2)">
+            <div class="node-box"><span class="node-icon">📈</span></div>
+            <span class="node-label">BQML<br>ARIMA_PLUS</span>
+          </div>
+          <span class="pipe-arrow">→</span>
+          <div class="pipe-node node-pg" data-tab="4" onclick="activateNodeTab(this,4)">
+            <div class="node-box"><span class="node-icon">🐘</span></div>
+            <span class="node-label">PostgreSQL<br>Serving DB</span>
+          </div>
+          <span class="pipe-arrow">→</span>
+          <div class="pipe-node node-api" data-tab="4" onclick="activateNodeTab(this,4)">
+            <div class="node-box"><span class="node-icon">🚀</span></div>
+            <span class="node-label">FastAPI<br>Endpoint</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: RAG -->
+    <div>
+      <div class="branch-label" style="color:var(--accent3)">RAG + Narrative Layer</div>
+      <div class="pipeline-row">
+        <div class="pipeline">
+          <div class="pipe-node node-embed" data-tab="3" onclick="activateNodeTab(this,3)">
+            <div class="node-box"><span class="node-icon">📄</span></div>
+            <span class="node-label">Business<br>Docs</span>
+          </div>
+          <span class="pipe-arrow">→</span>
+          <div class="pipe-node node-embed" data-tab="3" onclick="activateNodeTab(this,3)">
+            <div class="node-box"><span class="node-icon">🧬</span></div>
+            <span class="node-label">LangChain<br>Embeddings</span>
+          </div>
+          <span class="pipe-arrow">→</span>
+          <div class="pipe-node node-rag" data-tab="3" onclick="activateNodeTab(this,3)">
+            <div class="node-box"><span class="node-icon">🔍</span></div>
+            <span class="node-label">FAISS/<br>Chroma</span>
+          </div>
+          <span class="pipe-arrow">→</span>
+          <div class="pipe-node node-rag" data-tab="3" onclick="activateNodeTab(this,3)">
+            <div class="node-box"><span class="node-icon">🔗</span></div>
+            <span class="node-label">RAG<br>Chain</span>
+          </div>
+          <span class="pipe-arrow">→</span>
+          <div class="pipe-node node-gpt" data-tab="3" onclick="activateNodeTab(this,3)">
+            <div class="node-box"><span class="node-icon">🤖</span></div>
+            <span class="node-label">GPT-4<br>Narrative</span>
+          </div>
+          <span class="pipe-arrow">→</span>
+          <div class="pipe-node node-pg" data-tab="4" onclick="activateNodeTab(this,4)">
+            <div class="node-box"><span class="node-icon">🐘</span></div>
+            <span class="node-label">PostgreSQL<br>Serving DB</span>
+          </div>
+          <span class="pipe-arrow">→</span>
+          <div class="pipe-node node-sched" data-tab="4" onclick="activateNodeTab(this,4)">
+            <div class="node-box"><span class="node-icon">⏰</span></div>
+            <span class="node-label">Cloud<br>Scheduler</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#4285f4"></div> GCP Managed</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#3fb950"></div> ML / Forecasting</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#d2a8ff"></div> LangChain / Vector</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div> Serving Layer</div>
+      <div class="legend-item" style="margin-left:auto; font-size:11px; color:var(--muted)">Click any node to jump to its tab ↓</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs-wrapper">
+    <div class="tab-nav">
+      <button class="tab-btn active" onclick="switchTab(0)"><span class="tab-num">0</span> Overview</button>
+      <button class="tab-btn" onclick="switchTab(1)"><span class="tab-num">1</span> Beam ETL</button>
+      <button class="tab-btn" onclick="switchTab(2)"><span class="tab-num">2</span> BigQuery ML</button>
+      <button class="tab-btn" onclick="switchTab(3)"><span class="tab-num">3</span> RAG + LangChain</button>
+      <button class="tab-btn" onclick="switchTab(4)"><span class="tab-num">4</span> FastAPI Serving</button>
+    </div>
+
+    <!-- ── Tab 0: Overview ───────────────────────────────────── -->
+    <div class="tab-panel active" id="tab-0">
+      <div class="callout">
+        <span class="callout-icon">💡</span>
+        <div class="callout-body">
+          <strong>How the system hangs together:</strong><br>
+          Raw sales data lands in GCS, gets cleaned by an Apache Beam job running on Dataflow, and flows into BigQuery.
+          BigQuery ML's <code>ARIMA_PLUS</code> model trains directly inside the warehouse — no Python ML environment needed for
+          the forecasting itself — and outputs 30-day predictions with confidence intervals per product.<br><br>
+          Those predictions, combined with your business documents (past campaign reports, product notes), get embedded into
+          FAISS or Chroma via LangChain. When a narrative is needed, the RAG chain retrieves the most relevant context for that
+          product, and GPT-4 writes a 3-paragraph executive summary grounded in both the numbers and the business history.<br><br>
+          Everything lands in PostgreSQL for low-latency serving via a FastAPI endpoint, with a Cloud Scheduler job re-running
+          the full pipeline every week automatically.
+        </div>
+      </div>
+
+      <div class="overview-grid">
+        <div class="ov-card">
+          <h3><span>🪣</span> Data Ingestion</h3>
+          <ul>
+            <li>Raw CSV sales files uploaded to GCS bucket</li>
+            <li>Apache Beam pipeline reads, validates, transforms</li>
+            <li>Runs on fully managed Dataflow service</li>
+            <li>Outputs clean Parquet to BigQuery staging table</li>
+          </ul>
+        </div>
+        <div class="ov-card">
+          <h3><span>📈</span> Forecasting</h3>
+          <ul>
+            <li>BQML <code>ARIMA_PLUS</code> trains inside BigQuery — pure SQL</li>
+            <li>30-day horizon, per-product per-store granularity</li>
+            <li>Returns forecast + lower/upper confidence intervals</li>
+            <li>No external Python ML infra needed for training</li>
+          </ul>
+        </div>
+        <div class="ov-card">
+          <h3><span>🔗</span> RAG + Narrative</h3>
+          <ul>
+            <li>Business docs chunked and embedded with OpenAI <code>text-embedding-3-small</code></li>
+            <li>FAISS (local) or Chroma (persistent) vector store</li>
+            <li>LangChain retrieval chain fetches top-K context</li>
+            <li>GPT-4 writes 3-paragraph executive summary per product</li>
+          </ul>
+        </div>
+        <div class="ov-card">
+          <h3><span>🚀</span> Serving</h3>
+          <ul>
+            <li>FastAPI writes forecasts + narratives to PostgreSQL</li>
+            <li>Two endpoints: <code>/forecasts/{product}</code> and <code>/narrative/{product}</code></li>
+            <li>Cloud Scheduler triggers full pipeline weekly via HTTP</li>
+            <li>Async SQLAlchemy for non-blocking DB writes</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="start-order">
+        <h3>🗺 Where to start if you're building from scratch</h3>
+        <div class="order-steps">
+          <div class="order-step">
+            <div class="order-num">1</div>
+            <div class="order-text"><strong>Tab 2 — BigQuery ML first.</strong> Get a working forecast with just SQL, no infrastructure yet. Validate the numbers with real data before touching anything else.</div>
+          </div>
+          <div class="order-step">
+            <div class="order-num">2</div>
+            <div class="order-text"><strong>Tab 1 — Beam ETL next.</strong> Once you trust the forecast model, productionize the ingestion layer. This replaces manual CSV uploads with a proper pipeline.</div>
+          </div>
+          <div class="order-step">
+            <div class="order-num">3</div>
+            <div class="order-text"><strong>Tab 3 — RAG + GPT in parallel.</strong> Can be built entirely on your laptop using local FAISS before any cloud serving is ready.</div>
+          </div>
+          <div class="order-step">
+            <div class="order-num">4</div>
+            <div class="order-text"><strong>Tab 4 — FastAPI + Cloud Scheduler last.</strong> Wire everything into a production serving layer once the upstream components are stable.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Tab 1: Beam ETL ───────────────────────────────────── -->
+    <div class="tab-panel" id="tab-1">
+      <div class="callout warn">
+        <span class="callout-icon">⚙️</span>
+        <div class="callout-body">
+          <strong>Apache Beam on Dataflow.</strong> The pipeline reads raw CSVs from GCS,
+          validates schema, cleans nulls, normalises dates, and writes clean rows directly to
+          a BigQuery staging table. Run locally with the DirectRunner first; swap to DataflowRunner for production.
+        </div>
+      </div>
+
+      <div class="step-list">
+
+        <!-- Step 1 -->
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-header">
+            <div class="step-num" style="background:rgba(255,159,67,0.15);color:#ff9f43;border:1px solid rgba(255,159,67,0.4)">1</div>
+            <div class="step-title">Install dependencies</div>
+            <div class="step-meta">requirements.txt</div>
+            <span class="step-chevron">›</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Install Apache Beam with GCP extras, Google Cloud Storage client, and BigQuery libraries.</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-lang">bash</span>
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+              </div>
+<pre><code><span class="cm"># Create a virtual environment</span>
+python -m venv .venv && source .venv/bin/activate
+
+pip install \
+  apache-beam[gcp]==2.55.0 \
+  google-cloud-storage==2.16.0 \
+  google-cloud-bigquery==3.19.0 \
+  pandas==2.2.1 \
+  pyarrow==15.0.2
+</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-header">
+            <div class="step-num" style="background:rgba(255,159,67,0.15);color:#ff9f43;border:1px solid rgba(255,159,67,0.4)">2</div>
+            <div class="step-title">Define the Beam pipeline</div>
+            <div class="step-meta">etl/beam_pipeline.py</div>
+            <span class="step-chevron">›</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Read CSVs from GCS, parse each row with a <code>DoFn</code>, validate and clean fields, then write to BigQuery.</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-lang">python</span>
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+              </div>
+<pre><code><span class="kw">import</span> apache_beam <span class="kw">as</span> beam
+<span class="kw">from</span> apache_beam.options.pipeline_options <span class="kw">import</span> PipelineOptions
+<span class="kw">from</span> apache_beam.io.gcp.bigquery <span class="kw">import</span> WriteToBigQuery, BigQueryDisposition
+<span class="kw">import</span> csv, logging
+<span class="kw">from</span> datetime <span class="kw">import</span> datetime
+
+<span class="cls">BQ_SCHEMA</span> = {
+    <span class="str">"fields"</span>: [
+        {<span class="str">"name"</span>: <span class="str">"date"</span>,       <span class="str">"type"</span>: <span class="str">"DATE"</span>},
+        {<span class="str">"name"</span>: <span class="str">"product_id"</span>, <span class="str">"type"</span>: <span class="str">"STRING"</span>},
+        {<span class="str">"name"</span>: <span class="str">"store_id"</span>,   <span class="str">"type"</span>: <span class="str">"STRING"</span>},
+        {<span class="str">"name"</span>: <span class="str">"units_sold"</span>, <span class="str">"type"</span>: <span class="str">"FLOAT64"</span>},
+        {<span class="str">"name"</span>: <span class="str">"revenue"</span>,    <span class="str">"type"</span>: <span class="str">"FLOAT64"</span>},
+    ]
+}
+
+<span class="kw">class</span> <span class="cls">ParseSalesRow</span>(beam.DoFn):
+    <span class="kw">def</span> <span class="fn">process</span>(self, line: str):
+        <span class="kw">try</span>:
+            row <span class="op">=</span> next(csv.DictReader([line],
+                fieldnames=[<span class="str">"date"</span>,<span class="str">"product_id"</span>,<span class="str">"store_id"</span>,<span class="str">"units_sold"</span>,<span class="str">"revenue"</span>]))
+            <span class="cm"># Validate and coerce</span>
+            <span class="kw">yield</span> {
+                <span class="str">"date"</span>:       datetime.strptime(row[<span class="str">"date"</span>], <span class="str">"%Y-%m-%d"</span>).date().isoformat(),
+                <span class="str">"product_id"</span>: row[<span class="str">"product_id"</span>].strip().upper(),
+                <span class="str">"store_id"</span>:   row[<span class="str">"store_id"</span>].strip(),
+                <span class="str">"units_sold"</span>: float(row[<span class="str">"units_sold"</span>] <span class="kw">or</span> <span class="num">0</span>),
+                <span class="str">"revenue"</span>:    float(row[<span class="str">"revenue"</span>] <span class="kw">or</span> <span class="num">0</span>),
+            }
+        <span class="kw">except</span> (ValueError, KeyError) <span class="kw">as</span> e:
+            logging.warning(<span class="str">"Skipping bad row: %s — %s"</span>, line[:80], e)
+
+
+<span class="kw">def</span> <span class="fn">run</span>(project: str, bucket: str, dataset: str, runner: str = <span class="str">"DirectRunner"</span>):
+    opts <span class="op">=</span> PipelineOptions(
+        runner      <span class="op">=</span> runner,
+        project     <span class="op">=</span> project,
+        region      <span class="op">=</span> <span class="str">"us-central1"</span>,
+        temp_location <span class="op">=</span> <span class="str">f"gs://{bucket}/tmp"</span>,
+        staging_location <span class="op">=</span> <span class="str">f"gs://{bucket}/staging"</span>,
+        save_main_session <span class="op">=</span> <span class="kw">True</span>,
+    )
+    <span class="kw">with</span> beam.Pipeline(options<span class="op">=</span>opts) <span class="kw">as</span> p:
+        (
+            p
+            | <span class="str">"ReadCSV"</span>      >> beam.io.ReadFromText(<span class="str">f"gs://{bucket}/sales/*.csv"</span>, skip_header_lines<span class="op">=</span><span class="num">1</span>)
+            | <span class="str">"ParseRows"</span>    >> beam.ParDo(ParseSalesRow())
+            | <span class="str">"WriteToBQ"</span>    >> WriteToBigQuery(
+                table          <span class="op">=</span> <span class="str">f"{project}:{dataset}.sales_clean"</span>,
+                schema         <span class="op">=</span> BQ_SCHEMA,
+                create_disposition <span class="op">=</span> BigQueryDisposition.CREATE_IF_NEEDED,
+                write_disposition  <span class="op">=</span> BigQueryDisposition.WRITE_TRUNCATE,
+            )
+        )
+
+
+<span class="kw">if</span> __name__ <span class="op">==</span> <span class="str">"__main__"</span>:
+    <span class="fn">run</span>(
+        project <span class="op">=</span> <span class="str">"my-gcp-project"</span>,
+        bucket  <span class="op">=</span> <span class="str">"my-retail-bucket"</span>,
+        dataset <span class="op">=</span> <span class="str">"retail_forecasting"</span>,
+        runner  <span class="op">=</span> <span class="str">"DataflowRunner"</span>,   <span class="cm"># swap to DataflowRunner for prod</span>
+    )
+</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-header">
+            <div class="step-num" style="background:rgba(255,159,67,0.15);color:#ff9f43;border:1px solid rgba(255,159,67,0.4)">3</div>
+            <div class="step-title">Test locally with DirectRunner</div>
+            <div class="step-meta">shell</div>
+            <span class="step-chevron">›</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Run the pipeline locally against a sample file to validate your transform logic before spending on Dataflow workers.</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-lang">bash</span>
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+              </div>
+<pre><code><span class="cm"># Create sample data</span>
+mkdir -p data/sales
+cat &gt; data/sales/sample.csv &lt;&lt;EOF
+date,product_id,store_id,units_sold,revenue
+2024-01-01,SKU-001,S01,12,240.00
+2024-01-01,SKU-002,S01,5,87.50
+2024-01-02,SKU-001,S01,,0
+EOF
+
+<span class="cm"># Run with local DirectRunner (reads from local fs, not GCS)</span>
+python -m etl.beam_pipeline \
+  --runner DirectRunner \
+  --project my-gcp-project
+
+<span class="cm"># Deploy to Dataflow</span>
+python -m etl.beam_pipeline \
+  --runner DataflowRunner \
+  --project my-gcp-project \
+  --region us-central1
+</code></pre>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Tab 2: BigQuery ML ────────────────────────────────── -->
+    <div class="tab-panel" id="tab-2">
+      <div class="callout tip">
+        <span class="callout-icon">🏁</span>
+        <div class="callout-body">
+          <strong>Start here.</strong> BigQuery ML lets you train a production-grade time-series model with pure SQL —
+          no Python ML environment, no GPU, no cluster management. Get a working 30-day forecast first, then build everything else around it.
+        </div>
+      </div>
+
+      <div class="step-list">
+
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-header">
+            <div class="step-num" style="background:rgba(63,185,80,0.15);color:#3fb950;border:1px solid rgba(63,185,80,0.4)">1</div>
+            <div class="step-title">Create the training dataset</div>
+            <div class="step-meta">BigQuery SQL</div>
+            <span class="step-chevron">›</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Aggregate daily sales per product into the time-series format that BQML ARIMA_PLUS expects: one row per (date, product_id) pair.</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-lang">sql</span>
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+              </div>
+<pre><code><span class="cm">-- Create aggregated daily sales view</span>
+<span class="kw">CREATE OR REPLACE VIEW</span> `retail_forecasting.v_daily_sales` <span class="kw">AS</span>
+<span class="kw">SELECT</span>
+  date,
+  product_id,
+  <span class="fn">SUM</span>(units_sold) <span class="kw">AS</span> total_units,
+  <span class="fn">SUM</span>(revenue)    <span class="kw">AS</span> total_revenue
+<span class="kw">FROM</span> `retail_forecasting.sales_clean`
+<span class="kw">WHERE</span> units_sold <span class="op">&gt;</span> <span class="num">0</span>           <span class="cm">-- exclude zero-sale days from model</span>
+  <span class="kw">AND</span> date <span class="op">&gt;=</span> <span class="str">'2022-01-01'</span>    <span class="cm">-- at least 2 years of history</span>
+<span class="kw">GROUP BY</span> <span class="num">1</span>, <span class="num">2</span>
+<span class="kw">ORDER BY</span> <span class="num">1</span>, <span class="num">2</span>;
+</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-header">
+            <div class="step-num" style="background:rgba(63,185,80,0.15);color:#3fb950;border:1px solid rgba(63,185,80,0.4)">2</div>
+            <div class="step-title">Train ARIMA_PLUS model</div>
+            <div class="step-meta">BigQuery SQL</div>
+            <span class="step-chevron">›</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">BQML automatically selects the best ARIMA order, handles holiday effects, and trains a separate model per product in one statement.</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-lang">sql</span>
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+              </div>
+<pre><code><span class="kw">CREATE OR REPLACE MODEL</span> `retail_forecasting.arima_sales_model`
+<span class="kw">OPTIONS</span>(
+  model_type          <span class="op">=</span> <span class="str">'ARIMA_PLUS'</span>,
+  time_series_timestamp_col <span class="op">=</span> <span class="str">'date'</span>,
+  time_series_data_col      <span class="op">=</span> <span class="str">'total_units'</span>,
+  time_series_id_col        <span class="op">=</span> <span class="str">'product_id'</span>,   <span class="cm">-- separate model per product</span>
+  horizon                   <span class="op">=</span> <span class="num">30</span>,              <span class="cm">-- 30-day forecast</span>
+  auto_arima                <span class="op">=</span> <span class="kw">TRUE</span>,
+  data_frequency            <span class="op">=</span> <span class="str">'AUTO_FREQUENCY'</span>,
+  decompose_time_series     <span class="op">=</span> <span class="kw">TRUE</span>,
+  holiday_region            <span class="op">=</span> <span class="str">'US'</span>             <span class="cm">-- include US holiday effects</span>
+) <span class="kw">AS</span>
+<span class="kw">SELECT</span> date, product_id, total_units
+<span class="kw">FROM</span> `retail_forecasting.v_daily_sales`;
+</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-header">
+            <div class="step-num" style="background:rgba(63,185,80,0.15);color:#3fb950;border:1px solid rgba(63,185,80,0.4)">3</div>
+            <div class="step-title">Generate 30-day forecasts</div>
+            <div class="step-meta">BigQuery SQL</div>
+            <span class="step-chevron">›</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Call <code>ML.FORECAST</code> to get per-product predictions with 80% and 95% confidence intervals, then materialize into a results table.</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-lang">sql</span>
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+              </div>
+<pre><code><span class="cm">-- Generate forecast and store results</span>
+<span class="kw">CREATE OR REPLACE TABLE</span> `retail_forecasting.forecasts_30d` <span class="kw">AS</span>
+<span class="kw">SELECT</span>
+  forecast_timestamp                    <span class="kw">AS</span> forecast_date,
+  product_id,
+  <span class="fn">ROUND</span>(forecast_value, <span class="num">2</span>)             <span class="kw">AS</span> forecast_units,
+  <span class="fn">ROUND</span>(prediction_interval_lower_bound, <span class="num">2</span>) <span class="kw">AS</span> ci_lower,
+  <span class="fn">ROUND</span>(prediction_interval_upper_bound, <span class="num">2</span>) <span class="kw">AS</span> ci_upper,
+  confidence_level,
+  <span class="fn">CURRENT_TIMESTAMP</span>()                   <span class="kw">AS</span> generated_at
+<span class="kw">FROM</span>
+  <span class="fn">ML.FORECAST</span>(
+    <span class="kw">MODEL</span> `retail_forecasting.arima_sales_model`,
+    <span class="kw">STRUCT</span>(<span class="num">30</span> <span class="kw">AS</span> horizon, <span class="num">0.8</span> <span class="kw">AS</span> confidence_level)
+  )
+<span class="kw">ORDER BY</span> product_id, forecast_date;
+</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-header">
+            <div class="step-num" style="background:rgba(63,185,80,0.15);color:#3fb950;border:1px solid rgba(63,185,80,0.4)">4</div>
+            <div class="step-title">Evaluate model accuracy</div>
+            <div class="step-meta">BigQuery SQL</div>
+            <span class="step-chevron">›</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Use <code>ML.EVALUATE</code> to check MAPE, RMSE, and other metrics before promoting the model to production.</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-lang">sql</span>
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+              </div>
+<pre><code><span class="kw">SELECT</span>
+  product_id,
+  <span class="fn">ROUND</span>(mean_absolute_percentage_error <span class="op">*</span> <span class="num">100</span>, <span class="num">2</span>) <span class="kw">AS</span> mape_pct,
+  <span class="fn">ROUND</span>(root_mean_squared_error, <span class="num">2</span>)              <span class="kw">AS</span> rmse,
+  <span class="fn">ROUND</span>(mean_absolute_error, <span class="num">2</span>)                  <span class="kw">AS</span> mae,
+  symmetric_mean_absolute_percentage_error        <span class="kw">AS</span> smape,
+  AIC
+<span class="kw">FROM</span>
+  <span class="fn">ML.EVALUATE</span>(<span class="kw">MODEL</span> `retail_forecasting.arima_sales_model`)
+<span class="kw">ORDER BY</span> mape_pct <span class="kw">ASC</span>;
+
+<span class="cm">-- Check time-series components</span>
+<span class="kw">SELECT</span> *
+<span class="kw">FROM</span> <span class="fn">ML.ARIMA_EVALUATE</span>(<span class="kw">MODEL</span> `retail_forecasting.arima_sales_model`)
+<span class="kw">ORDER BY</span> AIC;
+</code></pre>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Tab 3: RAG + LangChain ────────────────────────────── -->
+    <div class="tab-panel" id="tab-3">
+      <div class="callout">
+        <span class="callout-icon">🔗</span>
+        <div class="callout-body">
+          <strong>LangChain RAG chain.</strong> Business documents (campaign reports, product notes, category briefs) are chunked,
+          embedded with <code>text-embedding-3-small</code>, and stored in a FAISS or Chroma vector store.
+          For each product, the RAG chain retrieves the most relevant context and GPT-4 writes a grounded 3-paragraph executive summary.
+        </div>
+      </div>
+
+      <div class="step-list">
+
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-header">
+            <div class="step-num" style="background:rgba(210,168,255,0.15);color:#d2a8ff;border:1px solid rgba(210,168,255,0.4)">1</div>
+            <div class="step-title">Install RAG dependencies</div>
+            <div class="step-meta">requirements.txt</div>
+            <span class="step-chevron">›</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Install LangChain, OpenAI client, and your vector store of choice (FAISS for local development, Chroma for persistence).</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-lang">bash</span>
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+              </div>
+<pre><code>pip install \
+  langchain==0.2.6 \
+  langchain-openai==0.1.14 \
+  langchain-community==0.2.6 \
+  faiss-cpu==1.8.0 \
+  chromadb==0.5.3 \
+  pypdf==4.2.0 \
+  python-dotenv==1.0.1 \
+  openai==1.35.7
+</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-header">
+            <div class="step-num" style="background:rgba(210,168,255,0.15);color:#d2a8ff;border:1px solid rgba(210,168,255,0.4)">2</div>
+            <div class="step-title">Build the vector store</div>
+            <div class="step-meta">rag/vector_store.py</div>
+            <span class="step-chevron">›</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Load and chunk all business documents, embed them with OpenAI's embedding model, and save the index for reuse.</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-lang">python</span>
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+              </div>
+<pre><code><span class="kw">from</span> pathlib <span class="kw">import</span> Path
+<span class="kw">from</span> langchain_community.document_loaders <span class="kw">import</span> DirectoryLoader, PyPDFLoader
+<span class="kw">from</span> langchain.text_splitter <span class="kw">import</span> RecursiveCharacterTextSplitter
+<span class="kw">from</span> langchain_openai <span class="kw">import</span> OpenAIEmbeddings
+<span class="kw">from</span> langchain_community.vectorstores <span class="kw">import</span> FAISS
+<span class="kw">import</span> os
+
+<span class="fn">EMBED_MODEL</span> <span class="op">=</span> <span class="str">"text-embedding-3-small"</span>
+<span class="fn">INDEX_PATH</span>  <span class="op">=</span> Path(<span class="str">"data/faiss_index"</span>)
+
+<span class="kw">def</span> <span class="fn">build_vector_store</span>(docs_dir: str <span class="op">=</span> <span class="str">"data/business_docs"</span>) -> FAISS:
+    <span class="cm"># 1. Load PDFs and text files from the docs directory</span>
+    loader <span class="op">=</span> DirectoryLoader(
+        docs_dir,
+        glob         <span class="op">=</span> <span class="str">"**/*.{pdf,txt,md}"</span>,
+        loader_cls   <span class="op">=</span> PyPDFLoader,
+        show_progress<span class="op">=</span><span class="kw">True</span>,
+    )
+    raw_docs <span class="op">=</span> loader.load()
+
+    <span class="cm"># 2. Chunk into 600-token windows with 80-token overlap</span>
+    splitter <span class="op">=</span> RecursiveCharacterTextSplitter(
+        chunk_size    <span class="op">=</span> <span class="num">600</span>,
+        chunk_overlap <span class="op">=</span> <span class="num">80</span>,
+        separators    <span class="op">=</span> [<span class="str">"\n\n"</span>, <span class="str">"\n"</span>, <span class="str">" "</span>, <span class="str">""</span>],
+    )
+    chunks <span class="op">=</span> splitter.split_documents(raw_docs)
+    print(<span class="str">f"Loaded {len(raw_docs)} docs → {len(chunks)} chunks"</span>)
+
+    <span class="cm"># 3. Embed and store in FAISS</span>
+    embeddings <span class="op">=</span> OpenAIEmbeddings(model<span class="op">=</span>EMBED_MODEL)
+    store      <span class="op">=</span> FAISS.from_documents(chunks, embeddings)
+
+    <span class="cm"># 4. Persist index to disk</span>
+    INDEX_PATH.mkdir(parents<span class="op">=</span><span class="kw">True</span>, exist_ok<span class="op">=</span><span class="kw">True</span>)
+    store.save_local(str(INDEX_PATH))
+    <span class="kw">return</span> store
+
+
+<span class="kw">def</span> <span class="fn">load_vector_store</span>() -> FAISS:
+    embeddings <span class="op">=</span> OpenAIEmbeddings(model<span class="op">=</span>EMBED_MODEL)
+    <span class="kw">return</span> FAISS.load_local(
+        str(INDEX_PATH), embeddings,
+        allow_dangerous_deserialization<span class="op">=</span><span class="kw">True</span>,
+    )
+
+
+<span class="kw">if</span> __name__ <span class="op">==</span> <span class="str">"__main__"</span>:
+    <span class="fn">build_vector_store</span>()
+    print(<span class="str">"Vector store saved to"</span>, INDEX_PATH)
+</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-header">
+            <div class="step-num" style="background:rgba(210,168,255,0.15);color:#d2a8ff;border:1px solid rgba(210,168,255,0.4)">3</div>
+            <div class="step-title">Build the RAG narrative chain</div>
+            <div class="step-meta">rag/narrative_chain.py</div>
+            <span class="step-chevron">›</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Combine the retrieved context with the numeric forecast data and pass both to GPT-4 to generate a grounded 3-paragraph executive summary.</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-lang">python</span>
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+              </div>
+<pre><code><span class="kw">from</span> langchain_openai <span class="kw">import</span> ChatOpenAI
+<span class="kw">from</span> langchain.prompts <span class="kw">import</span> ChatPromptTemplate
+<span class="kw">from</span> langchain.schema.runnable <span class="kw">import</span> RunnablePassthrough
+<span class="kw">from</span> langchain.schema.output_parser <span class="kw">import</span> StrOutputParser
+<span class="kw">from</span> rag.vector_store <span class="kw">import</span> load_vector_store
+
+_SYSTEM <span class="op">=</span> <span class="str">"""You are a senior retail analyst. Write a concise 3-paragraph executive
+summary for the following product forecast. Ground every claim in either the
+numeric forecast data or the retrieved business context — do not invent facts.
+
+Paragraph 1 — Trend: describe the 30-day sales trajectory.
+Paragraph 2 — Drivers: explain likely causes using the business context.
+Paragraph 3 — Recommendation: one concrete action the merchandising team should take."""</span>
+
+_HUMAN <span class="op">=</span> <span class="str">"""PRODUCT: {product_id}
+
+FORECAST DATA:
+{forecast_data}
+
+RETRIEVED BUSINESS CONTEXT:
+{context}
+
+Write the executive summary now."""</span>
+
+<span class="kw">def</span> <span class="fn">build_chain</span>():
+    store     <span class="op">=</span> load_vector_store()
+    retriever <span class="op">=</span> store.as_retriever(search_kwargs<span class="op">=</span>{<span class="str">"k"</span>: <span class="num">5</span>})
+    llm       <span class="op">=</span> ChatOpenAI(model<span class="op">=</span><span class="str">"gpt-4o"</span>, temperature<span class="op">=</span><span class="num">0.3</span>)
+    prompt    <span class="op">=</span> ChatPromptTemplate.from_messages([
+        (<span class="str">"system"</span>, _SYSTEM),
+        (<span class="str">"human"</span>,  _HUMAN),
+    ])
+
+    <span class="kw">def</span> <span class="fn">format_docs</span>(docs) -> str:
+        <span class="kw">return</span> <span class="str">"\n\n---\n\n"</span>.join(
+            <span class="str">f"[{d.metadata.get('source','?')}]\n{d.page_content}"</span> <span class="kw">for</span> d <span class="kw">in</span> docs
+        )
+
+    <span class="kw">return</span> (
+        {
+            <span class="str">"context"</span>:       retriever | format_docs,
+            <span class="str">"product_id"</span>:    RunnablePassthrough(),
+            <span class="str">"forecast_data"</span>: RunnablePassthrough(),
+        }
+        | prompt
+        | llm
+        | StrOutputParser()
+    )
+
+
+<span class="kw">def</span> <span class="fn">generate_narrative</span>(product_id: str, forecast_rows: list[dict]) -> str:
+    chain <span class="op">=</span> build_chain()
+    forecast_str <span class="op">=</span> <span class="str">"\n"</span>.join(
+        <span class="str">f"{r['forecast_date']}: {r['forecast_units']:.0f} units "
+        f"(CI: {r['ci_lower']:.0f}–{r['ci_upper']:.0f})"</span>
+        <span class="kw">for</span> r <span class="kw">in</span> forecast_rows
+    )
+    <span class="kw">return</span> chain.invoke({
+        <span class="str">"product_id"</span>:    product_id,
+        <span class="str">"forecast_data"</span>: forecast_str,
+    })
+
+
+<span class="kw">if</span> __name__ <span class="op">==</span> <span class="str">"__main__"</span>:
+    <span class="kw">import</span> json
+    sample <span class="op">=</span> [
+        {<span class="str">"forecast_date"</span>:<span class="str">"2024-02-01"</span>,<span class="str">"forecast_units"</span>:<span class="num">145</span>,<span class="str">"ci_lower"</span>:<span class="num">130</span>,<span class="str">"ci_upper"</span>:<span class="num">160</span>},
+    ]
+    narrative <span class="op">=</span> generate_narrative(<span class="str">"SKU-001"</span>, sample)
+    print(narrative)
+</code></pre>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Tab 4: FastAPI Serving ─────────────────────────────── -->
+    <div class="tab-panel" id="tab-4">
+      <div class="callout">
+        <span class="callout-icon">🚀</span>
+        <div class="callout-body">
+          <strong>FastAPI + PostgreSQL + Cloud Scheduler.</strong> The serving layer exposes two endpoints:
+          <code>/forecasts/{product_id}</code> for numeric predictions and <code>/narrative/{product_id}</code> for the GPT-4 summary.
+          Cloud Scheduler hits a <code>/run-pipeline</code> endpoint weekly to retrain and regenerate everything automatically.
+        </div>
+      </div>
+
+      <div class="step-list">
+
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-header">
+            <div class="step-num" style="background:rgba(88,166,255,0.15);color:#58a6ff;border:1px solid rgba(88,166,255,0.4)">1</div>
+            <div class="step-title">Database schema & models</div>
+            <div class="step-meta">db/models.py</div>
+            <span class="step-chevron">›</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Define SQLAlchemy ORM models for the forecasts and narratives tables in PostgreSQL.</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-lang">python</span>
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+              </div>
+<pre><code><span class="kw">from</span> sqlalchemy <span class="kw">import</span> Column, String, Float, Date, DateTime, Text, Integer
+<span class="kw">from</span> sqlalchemy.orm <span class="kw">import</span> DeclarativeBase
+<span class="kw">from</span> datetime <span class="kw">import</span> datetime, timezone
+
+
+<span class="kw">class</span> <span class="cls">Base</span>(DeclarativeBase):
+    <span class="kw">pass</span>
+
+
+<span class="kw">class</span> <span class="cls">Forecast</span>(Base):
+    __tablename__ <span class="op">=</span> <span class="str">"forecasts"</span>
+
+    id            <span class="op">=</span> Column(Integer, primary_key<span class="op">=</span><span class="kw">True</span>, autoincrement<span class="op">=</span><span class="kw">True</span>)
+    product_id    <span class="op">=</span> Column(String(64),  nullable<span class="op">=</span><span class="kw">False</span>, index<span class="op">=</span><span class="kw">True</span>)
+    forecast_date <span class="op">=</span> Column(Date,         nullable<span class="op">=</span><span class="kw">False</span>)
+    forecast_units<span class="op">=</span> Column(Float,        nullable<span class="op">=</span><span class="kw">False</span>)
+    ci_lower      <span class="op">=</span> Column(Float)
+    ci_upper      <span class="op">=</span> Column(Float)
+    generated_at  <span class="op">=</span> Column(DateTime(timezone<span class="op">=</span><span class="kw">True</span>),
+                           default<span class="op">=</span><span class="kw">lambda</span>: datetime.now(timezone.utc))
+
+
+<span class="kw">class</span> <span class="cls">Narrative</span>(Base):
+    __tablename__ <span class="op">=</span> <span class="str">"narratives"</span>
+
+    id          <span class="op">=</span> Column(Integer, primary_key<span class="op">=</span><span class="kw">True</span>, autoincrement<span class="op">=</span><span class="kw">True</span>)
+    product_id  <span class="op">=</span> Column(String(64), nullable<span class="op">=</span><span class="kw">False</span>, index<span class="op">=</span><span class="kw">True</span>)
+    summary     <span class="op">=</span> Column(Text,       nullable<span class="op">=</span><span class="kw">False</span>)
+    generated_at<span class="op">=</span> Column(DateTime(timezone<span class="op">=</span><span class="kw">True</span>),
+                         default<span class="op">=</span><span class="kw">lambda</span>: datetime.now(timezone.utc))
+</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-header">
+            <div class="step-num" style="background:rgba(88,166,255,0.15);color:#58a6ff;border:1px solid rgba(88,166,255,0.4)">2</div>
+            <div class="step-title">FastAPI application</div>
+            <div class="step-meta">api/main.py</div>
+            <span class="step-chevron">›</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Expose <code>/forecasts/{product_id}</code>, <code>/narrative/{product_id}</code>, and the <code>/run-pipeline</code> trigger endpoint. Uses async SQLAlchemy for non-blocking DB access.</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-lang">python</span>
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+              </div>
+<pre><code><span class="kw">from</span> contextlib <span class="kw">import</span> asynccontextmanager
+<span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI, HTTPException, BackgroundTasks, Depends, Header
+<span class="kw">from</span> fastapi.responses <span class="kw">import</span> JSONResponse
+<span class="kw">from</span> sqlalchemy.ext.asyncio <span class="kw">import</span> AsyncSession, create_async_engine, async_sessionmaker
+<span class="kw">from</span> sqlalchemy <span class="kw">import</span> select
+<span class="kw">from</span> pydantic <span class="kw">import</span> BaseModel
+<span class="kw">from</span> typing <span class="kw">import</span> Annotated
+<span class="kw">import</span> os, secrets
+<span class="kw">from</span> db.models <span class="kw">import</span> Base, Forecast, Narrative
+
+<span class="fn">DATABASE_URL</span> <span class="op">=</span> os.environ[<span class="str">"DATABASE_URL"</span>]   <span class="cm"># e.g. postgresql+asyncpg://...</span>
+<span class="fn">SCHEDULER_SECRET</span> <span class="op">=</span> os.environ[<span class="str">"SCHEDULER_SECRET"</span>]  <span class="cm"># shared secret for /run-pipeline</span>
+
+engine     <span class="op">=</span> create_async_engine(DATABASE_URL, pool_size<span class="op">=</span><span class="num">10</span>)
+SessionDep <span class="op">=</span> async_sessionmaker(engine, expire_on_commit<span class="op">=</span><span class="kw">False</span>)
+
+
+<span class="kw">async def</span> <span class="fn">get_db</span>():
+    <span class="kw">async with</span> SessionDep() <span class="kw">as</span> db:
+        <span class="kw">yield</span> db
+
+
+<span class="op">@</span>asynccontextmanager
+<span class="kw">async def</span> <span class="fn">lifespan</span>(app):
+    <span class="kw">async with</span> engine.begin() <span class="kw">as</span> conn:
+        <span class="kw">await</span> conn.run_sync(Base.metadata.create_all)
+    <span class="kw">yield</span>
+
+
+app <span class="op">=</span> FastAPI(title<span class="op">=</span><span class="str">"Retail Forecasting API"</span>, version<span class="op">=</span><span class="str">"1.0"</span>, lifespan<span class="op">=</span>lifespan)
+
+
+<span class="kw">class</span> <span class="cls">ForecastRow</span>(BaseModel):
+    forecast_date:  str
+    forecast_units: float
+    ci_lower:       float <span class="op">|</span> <span class="kw">None</span>
+    ci_upper:       float <span class="op">|</span> <span class="kw">None</span>
+
+
+<span class="op">@</span>app.get(<span class="str">"/forecasts/{product_id}"</span>, response_model<span class="op">=</span>list[ForecastRow])
+<span class="kw">async def</span> <span class="fn">get_forecasts</span>(product_id: str, db: AsyncSession <span class="op">=</span> Depends(get_db)):
+    result <span class="op">=</span> <span class="kw">await</span> db.execute(
+        select(Forecast)
+        .where(Forecast.product_id <span class="op">==</span> product_id.upper())
+        .order_by(Forecast.forecast_date)
+    )
+    rows <span class="op">=</span> result.scalars().all()
+    <span class="kw">if not</span> rows:
+        <span class="kw">raise</span> HTTPException(<span class="num">404</span>, <span class="str">f"No forecasts for product {product_id!r}"</span>)
+    <span class="kw">return</span> [ForecastRow(
+        forecast_date  <span class="op">=</span> str(r.forecast_date),
+        forecast_units <span class="op">=</span> r.forecast_units,
+        ci_lower       <span class="op">=</span> r.ci_lower,
+        ci_upper       <span class="op">=</span> r.ci_upper,
+    ) <span class="kw">for</span> r <span class="kw">in</span> rows]
+
+
+<span class="op">@</span>app.get(<span class="str">"/narrative/{product_id}"</span>)
+<span class="kw">async def</span> <span class="fn">get_narrative</span>(product_id: str, db: AsyncSession <span class="op">=</span> Depends(get_db)):
+    result <span class="op">=</span> <span class="kw">await</span> db.execute(
+        select(Narrative)
+        .where(Narrative.product_id <span class="op">==</span> product_id.upper())
+        .order_by(Narrative.generated_at.desc())
+        .limit(<span class="num">1</span>)
+    )
+    row <span class="op">=</span> result.scalar_one_or_none()
+    <span class="kw">if not</span> row:
+        <span class="kw">raise</span> HTTPException(<span class="num">404</span>, <span class="str">f"No narrative for product {product_id!r}"</span>)
+    <span class="kw">return</span> {<span class="str">"product_id"</span>: row.product_id, <span class="str">"summary"</span>: row.summary, <span class="str">"generated_at"</span>: str(row.generated_at)}
+
+
+<span class="op">@</span>app.post(<span class="str">"/run-pipeline"</span>, status_code<span class="op">=</span><span class="num">202</span>)
+<span class="kw">async def</span> <span class="fn">trigger_pipeline</span>(
+    background_tasks: BackgroundTasks,
+    x_scheduler_secret: Annotated[str <span class="op">|</span> <span class="kw">None</span>, Header()] <span class="op">=</span> <span class="kw">None</span>,
+):
+    <span class="cm"># Validate shared secret from Cloud Scheduler OIDC header</span>
+    <span class="kw">if not</span> secrets.compare_digest(x_scheduler_secret <span class="kw">or</span> <span class="str">""</span>, SCHEDULER_SECRET):
+        <span class="kw">raise</span> HTTPException(<span class="num">403</span>, <span class="str">"Forbidden"</span>)
+    background_tasks.add_task(run_full_pipeline)
+    <span class="kw">return</span> {<span class="str">"status"</span>: <span class="str">"pipeline queued"</span>}
+
+
+<span class="kw">async def</span> <span class="fn">run_full_pipeline</span>():
+    <span class="cm"># Orchestrate: Beam ETL → BQML retrain → forecast → RAG narrative → DB write</span>
+    <span class="kw">import</span> subprocess, asyncio
+    await asyncio.to_thread(subprocess.run, [<span class="str">"python"</span>, <span class="str">"-m"</span>, <span class="str">"etl.beam_pipeline"</span>], check<span class="op">=</span><span class="kw">True</span>)
+    <span class="cm"># BQML retrain and forecast run via BigQuery job API (see bq_jobs.py)</span>
+</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-header">
+            <div class="step-num" style="background:rgba(88,166,255,0.15);color:#58a6ff;border:1px solid rgba(88,166,255,0.4)">3</div>
+            <div class="step-title">Docker + Cloud Run deployment</div>
+            <div class="step-meta">Dockerfile</div>
+            <span class="step-chevron">›</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">Containerise the FastAPI app and deploy it to Cloud Run. Set <code>DATABASE_URL</code>, <code>OPENAI_API_KEY</code>, and <code>SCHEDULER_SECRET</code> as Cloud Run secrets.</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-lang">dockerfile</span>
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+              </div>
+<pre><code><span class="kw">FROM</span> <span class="cls">python:3.12-slim</span>
+
+<span class="kw">WORKDIR</span> /app
+<span class="kw">COPY</span> requirements.txt .
+<span class="kw">RUN</span>  pip install --no-cache-dir -r requirements.txt
+
+<span class="kw">COPY</span> . .
+
+<span class="kw">EXPOSE</span> <span class="num">8080</span>
+<span class="kw">CMD</span> [<span class="str">"uvicorn"</span>, <span class="str">"api.main:app"</span>, <span class="str">"--host"</span>, <span class="str">"0.0.0.0"</span>, <span class="str">"--port"</span>, <span class="str">"8080"</span>, <span class="str">"--workers"</span>, <span class="str">"2"</span>]
+</code></pre>
+            </div>
+            <div class="code-block" style="border-top:none">
+              <div class="code-header">
+                <span class="code-lang">bash — deploy to Cloud Run</span>
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+              </div>
+<pre><code><span class="cm"># Build and push image</span>
+gcloud builds submit --tag gcr.io/my-gcp-project/retail-forecasting-api
+
+<span class="cm"># Deploy to Cloud Run</span>
+gcloud run deploy retail-forecasting-api \
+  --image   gcr.io/my-gcp-project/retail-forecasting-api \
+  --region  us-central1 \
+  --platform managed \
+  --no-allow-unauthenticated \
+  --memory  2Gi \
+  --set-secrets "DATABASE_URL=db-url:latest,OPENAI_API_KEY=openai-key:latest,SCHEDULER_SECRET=sched-secret:latest"
+
+<span class="cm"># Schedule weekly pipeline run (every Monday 02:00 UTC)</span>
+gcloud scheduler jobs create http weekly-forecast \
+  --schedule    "0 2 * * 1" \
+  --uri         "https://retail-forecasting-api-xxx.run.app/run-pipeline" \
+  --oidc-service-account scheduler@my-gcp-project.iam.gserviceaccount.com \
+  --http-method POST \
+  --headers     "X-Scheduler-Secret=\$(gcloud secrets versions access latest --secret sched-secret)"
+</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-header">
+            <div class="step-num" style="background:rgba(88,166,255,0.15);color:#58a6ff;border:1px solid rgba(88,166,255,0.4)">4</div>
+            <div class="step-title">Environment variables reference</div>
+            <div class="step-meta">.env.example</div>
+            <span class="step-chevron">›</span>
+          </div>
+          <div class="step-body">
+            <div class="step-desc">All secrets are loaded from environment variables — never hardcoded. Use Cloud Run Secret Manager mounts in production.</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-lang">env</span>
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+              </div>
+<pre><code><span class="cm"># GCP</span>
+GOOGLE_CLOUD_PROJECT=my-gcp-project
+GCS_BUCKET=my-retail-bucket
+BQ_DATASET=retail_forecasting
+
+<span class="cm"># Database (asyncpg driver for async SQLAlchemy)</span>
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/retail
+
+<span class="cm"># OpenAI</span>
+OPENAI_API_KEY=sk-...
+
+<span class="cm"># Cloud Scheduler shared secret</span>
+SCHEDULER_SECRET=&lt;generate with: python -c "import secrets; print(secrets.token_hex(32))"&gt;
+</code></pre>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /tabs-wrapper -->
+</div><!-- /container -->
+
+<script>
+  // ── Tab switching with View Transitions API ──────────────────
+  function switchTab(idx) {
+    const panels = document.querySelectorAll('.tab-panel');
+    const btns   = document.querySelectorAll('.tab-btn');
+
+    const doSwitch = () => {
+      panels.forEach((p, i) => p.classList.toggle('active', i === idx));
+      btns.forEach((b, i)   => b.classList.toggle('active', i === idx));
+      // Reset open step cards when switching tabs
+      document.querySelectorAll('.step-card.open').forEach(c => c.classList.remove('open'));
+    };
+
+    if (document.startViewTransition) {
+      document.startViewTransition(doSwitch);
+    } else {
+      doSwitch();
+    }
+  }
+
+  // Jump to a tab from a pipeline node click
+  function activateNodeTab(node, tabIdx) {
+    document.querySelectorAll('.pipe-node').forEach(n => n.classList.remove('active'));
+    node.classList.add('active');
+    switchTab(tabIdx);
+    // Scroll to tabs section
+    document.querySelector('.tabs-wrapper').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ── Step card accordion ──────────────────────────────────────
+  function toggleStep(card) {
+    // If clicking on a copy button, don't toggle
+    if (event.target.classList.contains('copy-btn')) return;
+    card.classList.toggle('open');
+  }
+
+  // ── Copy code button ─────────────────────────────────────────
+  function copyCode(btn) {
+    const block = btn.closest('.code-block');
+    const text  = block.querySelector('pre').innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'Copy';
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+  }
+
+  // ── Auto-open first step card in each tab on tab switch ──────
+  const originalSwitch = window.switchTab;
+  window.switchTab = function(idx) {
+    originalSwitch(idx);
+    setTimeout(() => {
+      const activePanel = document.querySelector('.tab-panel.active');
+      const first = activePanel?.querySelector('.step-card');
+      if (first && !first.classList.contains('open')) first.classList.add('open');
+    }, 50);
+  };
+
+  // Open first card in the initially active tab
+  document.addEventListener('DOMContentLoaded', () => {
+    const first = document.querySelector('.tab-panel.active .step-card');
+    if (first) first.classList.add('open');
+  });
+</script>
+</body>
+</html>
