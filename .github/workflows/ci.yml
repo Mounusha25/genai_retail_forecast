@@ -13,6 +13,8 @@ jobs:
     timeout-minutes: 15
 
     env:
+      # Opt into Node.js 24 ahead of the June 2026 forced migration
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       # Minimal settings so config/settings.py can be imported
       GOOGLE_CLOUD_PROJECT:  test-project
       GCS_BUCKET:            test-bucket
@@ -72,6 +74,8 @@ jobs:
     name: Docker build check
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
 

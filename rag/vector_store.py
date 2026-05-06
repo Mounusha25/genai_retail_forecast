@@ -3,8 +3,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from langchain_community.document_loaders import DirectoryLoader, TextLoader
-from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, TextLoader
 from langchain_community.vectorstores import FAISS
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -18,9 +17,11 @@ def _make_embeddings():
     cfg = get_settings()
     if cfg.embedding_provider == "local":
         from langchain_huggingface import HuggingFaceEmbeddings  # type: ignore[import]
+
         return HuggingFaceEmbeddings(model_name=cfg.huggingface_embed_model)
     else:
         from langchain_openai import OpenAIEmbeddings  # type: ignore[import]
+
         return OpenAIEmbeddings(
             model=cfg.openai_embed_model,
             openai_api_key=cfg.openai_api_key,
@@ -37,15 +38,15 @@ def build_vector_store(docs_dir: str | None = None) -> FAISS:
     Returns:
         The in-memory FAISS store (also saved to disk).
     """
-    cfg     = get_settings()
+    cfg = get_settings()
     src_dir = docs_dir or cfg.docs_dir
     idx_dir = Path(cfg.faiss_index_path)
 
     # ── 1. Load documents ──────────────────────────────────────
     loaders = [
-        DirectoryLoader(src_dir, glob="**/*.pdf", loader_cls=PyPDFLoader, silent_errors=True),
+        DirectoryLoader(src_dir, glob="**/*.pdf", loader_cls=PyPDFLoader, silent_errors=True),  # type: ignore[arg-type]
         DirectoryLoader(src_dir, glob="**/*.txt", loader_cls=TextLoader, silent_errors=True),
-        DirectoryLoader(src_dir, glob="**/*.md",  loader_cls=TextLoader, silent_errors=True),
+        DirectoryLoader(src_dir, glob="**/*.md", loader_cls=TextLoader, silent_errors=True),
     ]
     raw_docs = []
     for ldr in loaders:
@@ -79,14 +80,11 @@ def build_vector_store(docs_dir: str | None = None) -> FAISS:
 
 def load_vector_store() -> FAISS:
     """Load an existing FAISS index from disk."""
-    cfg     = get_settings()
+    cfg = get_settings()
     idx_dir = Path(cfg.faiss_index_path)
 
     if not idx_dir.exists():
-        raise FileNotFoundError(
-            f"FAISS index not found at {idx_dir}. "
-            "Run `python -m scripts.build_index` first."
-        )
+        raise FileNotFoundError(f"FAISS index not found at {idx_dir}. Run `python -m scripts.build_index` first.")
 
     embeddings = _make_embeddings()
     store = FAISS.load_local(
