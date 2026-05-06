@@ -1,0 +1,50 @@
+# ── Version control ──────────────────────────────────────────────
+.git
+.gitignore
+
+# ── Python build artefacts ───────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# ── Virtual environment ──────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Tests & tooling ──────────────────────────────────────────────
+tests/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+.coverage
+htmlcov/
+
+# ── FAISS index (built at container startup via entrypoint.sh) ───
+data/faiss_index/
+
+# ── Local dev secrets ────────────────────────────────────────────
+.env
+.env.local
+
+# ── IDE & OS noise ───────────────────────────────────────────────
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+
+# ── CI / docs ────────────────────────────────────────────────────
+.github/
+*.md
+Makefile
+
+# ── Notebooks ────────────────────────────────────────────────────
+*.ipynb
+notebooks/

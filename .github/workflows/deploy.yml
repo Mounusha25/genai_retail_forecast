@@ -1,27 +1,97 @@
 name: Deploy to Cloud Run
 
+# ── Triggers ──────────────────────────────────────────────────────
+# Auto-deploy on semver tags (e.g. git tag v1.2.3 && git push --tags)
+# Manual deploy via GitHub UI (Actions → Deploy to Cloud Run → Run workflow)
 on:
   push:
-    branches: [main]
     tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: production
+        type: choice
+        options: [production, staging]
 
+# ── Shared config ─────────────────────────────────────────────────
 env:
-  PROJECT_ID:  ${{ vars.GCP_PROJECT_ID }}
-  REGION:      us-central1
-  IMAGE:       gcr.io/${{ vars.GCP_PROJECT_ID }}/retail-forecasting-api
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  REGION: us-central1
+  SERVICE_NAME: retail-forecasting-api
+  # Artifact Registry path  (set GCP_PROJECT_ID in repo → Settings → Variables)
+  IMAGE: us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/retail-forecasting/retail-forecasting-api
 
 jobs:
-  deploy:
-    name: Build & Deploy
+  # ── Job 1: Run CI first ─────────────────────────────────────────
+  ci:
+    name: Lint + Test (pre-deploy gate)
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write   # Workload Identity Federation
+    timeout-minutes: 15
+
+    env:
+      GOOGLE_CLOUD_PROJECT: test-project
+      GCS_BUCKET:           test-bucket
+      DATABASE_URL:         postgresql+asyncpg://retail:retail@localhost:5432/retail
+      OPENAI_API_KEY:       sk-test-key
+      SCHEDULER_SECRET:     test-secret-do-not-use
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER:     retail
+          POSTGRES_PASSWORD: retail
+          POSTGRES_DB:       retail
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U retail"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Authenticate to GCP (Workload Identity)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install ".[base,etl,rag,api,dev]"
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: mypy
+        run: mypy api config db pipeline rag etl
+
+      - name: pytest
+        run: pytest --tb=short
+
+  # ── Job 2: Build & push Docker image ───────────────────────────
+  build:
+    name: Build & Push Image
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write   # required for Workload Identity Federation
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP (keyless — Workload Identity Federation)
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
@@ -30,32 +100,122 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Configure Docker for GCR
-        run: gcloud auth configure-docker --quiet
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
-      - name: Build & push Docker image
+      - name: Ensure Artifact Registry repository exists
         run: |
-          docker build --target runtime \
+          gcloud artifacts repositories describe retail-forecasting \
+            --location=us-central1 --project=${{ vars.GCP_PROJECT_ID }} \
+          || gcloud artifacts repositories create retail-forecasting \
+               --repository-format=docker \
+               --location=us-central1 \
+               --project=${{ vars.GCP_PROJECT_ID }} \
+               --description="Retail Forecasting API images"
+
+      - name: Compute image tag
+        id: meta
+        run: |
+          SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+          TAG="${{ env.IMAGE }}:${SHA_SHORT}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Image tag: ${TAG}"
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --target runtime \
             --build-arg BUILD_SHA=${{ github.sha }} \
-            -t "$IMAGE:${{ github.sha }}" \
-            -t "$IMAGE:latest" .
-          docker push "$IMAGE:${{ github.sha }}"
-          docker push "$IMAGE:latest"
+            --cache-from "${{ env.IMAGE }}:latest" \
+            -t "${{ steps.meta.outputs.tag }}" \
+            -t "${{ env.IMAGE }}:latest" \
+            .
+
+      - name: Push Docker image
+        run: |
+          docker push "${{ steps.meta.outputs.tag }}"
+          docker push "${{ env.IMAGE }}:latest"
+
+  # ── Job 3: Deploy to Cloud Run ──────────────────────────────────
+  deploy:
+    name: Deploy to Cloud Run
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+
+    environment:
+      name: ${{ inputs.environment || 'production' }}
+      url:  ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account:            ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
 
       - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          image:   ${{ needs.build.outputs.image_tag }}
+          region:  ${{ env.REGION }}
+          flags: >-
+            --platform=managed
+            --no-allow-unauthenticated
+            --memory=2Gi
+            --cpu=2
+            --min-instances=0
+            --max-instances=10
+            --concurrency=80
+            --timeout=300
+            --add-cloudsql-instances=${{ vars.GCP_PROJECT_ID }}:${{ env.REGION }}:${{ vars.CLOUD_SQL_INSTANCE }}
+          env_vars: |
+            ENVIRONMENT=production
+            LOG_LEVEL=INFO
+            BQ_DATASET=retail_forecasting
+            BQ_LOCATION=US
+            EMBEDDING_PROVIDER=local
+            HUGGINGFACE_EMBED_MODEL=all-MiniLM-L6-v2
+            LLM_PROVIDER=groq
+            GROQ_CHAT_MODEL=llama-3.3-70b-versatile
+            FORECAST_HORIZON_DAYS=30
+            FAISS_INDEX_PATH=data/faiss_index
+            DOCS_DIR=data/business_docs
+            CHUNK_SIZE=600
+            CHUNK_OVERLAP=80
+            RETRIEVER_TOP_K=5
+            UVICORN_WORKERS=2
+            APP_VERSION=${{ github.ref_name }}
+          secrets: |
+            DATABASE_URL=DATABASE_URL:latest
+            GROQ_API_KEY=GROQ_API_KEY:latest
+            SCHEDULER_SECRET=SCHEDULER_SECRET:latest
+            GOOGLE_CLOUD_PROJECT=GOOGLE_CLOUD_PROJECT:latest
+            GCS_BUCKET=GCS_BUCKET:latest
+
+      - name: Print service URL
+        run: echo "Service deployed to ${{ steps.deploy.outputs.url }}"
+
+      - name: Smoke test — health endpoint
         run: |
-          gcloud run deploy retail-forecasting-api \
-            --image   "$IMAGE:${{ github.sha }}" \
-            --region  "$REGION" \
-            --platform managed \
-            --no-allow-unauthenticated \
-            --memory  2Gi \
-            --cpu     2 \
-            --max-instances 10 \
-            --set-secrets \
-              "DATABASE_URL=db-url:latest,\
-               OPENAI_API_KEY=openai-key:latest,\
-               SCHEDULER_SECRET=sched-secret:latest,\
-               GOOGLE_CLOUD_PROJECT=gcp-project:latest,\
-               GCS_BUCKET=gcs-bucket:latest" \
-            --set-env-vars "ENVIRONMENT=production,LOG_LEVEL=INFO"
+          URL="${{ steps.deploy.outputs.url }}"
+          TOKEN=$(gcloud auth print-identity-token)
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            "${URL}/health")
+          if [ "$STATUS" != "200" ]; then
+            echo "Health check failed — got HTTP ${STATUS}"
+            exit 1
+          fi
+          echo "Health check passed (HTTP 200)"
+

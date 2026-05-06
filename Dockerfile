@@ -35,14 +35,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy application source
 COPY --chown=app:app . .
 
+# Make entrypoint executable
+RUN chmod +x scripts/entrypoint.sh
+
 USER app
 
 EXPOSE 8080
 
-# Use exec form for proper signal handling
-CMD ["uvicorn", "api.main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8080", \
-     "--workers", "2", \
-     "--proxy-headers", \
-     "--forwarded-allow-ips", "*"]
+# entrypoint.sh: builds FAISS index if missing → runs migrations → starts uvicorn
+ENTRYPOINT ["scripts/entrypoint.sh"]
