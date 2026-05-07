@@ -178,7 +178,6 @@ jobs:
             --max-instances=10
             --concurrency=80
             --timeout=300
-            --add-cloudsql-instances=${{ vars.GCP_PROJECT_ID }}:${{ env.REGION }}:${{ vars.CLOUD_SQL_INSTANCE }}
           env_vars: |
             ENVIRONMENT=production
             LOG_LEVEL=INFO

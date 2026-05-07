@@ -1,9 +1,12 @@
 """Alembic environment for async SQLAlchemy."""
+
 from __future__ import annotations
 
 import asyncio
 import os
 from logging.config import fileConfig
+
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -40,9 +43,20 @@ def do_run_migrations(connection):  # type: ignore[no-untyped-def]
         context.run_migrations()
 
 
+def _clean_url_and_ssl(url: str) -> tuple[str, dict]:  # type: ignore[type-arg]
+    parsed = urlparse(url)
+    params = parse_qs(parsed.query)
+    ssl_keys = {"ssl", "sslmode", "channel_binding"}
+    needs_ssl = bool(params.keys() & ssl_keys) or parsed.hostname not in ("localhost", "127.0.0.1", None)
+    clean_params = {k: v for k, v in params.items() if k not in ssl_keys}
+    clean_url = urlunparse(parsed._replace(query=urlencode(clean_params, doseq=True)))
+    return clean_url, ({"ssl": True} if needs_ssl else {})
+
+
 async def run_async_migrations() -> None:
-    url = config.get_main_option("sqlalchemy.url")
-    engine = create_async_engine(url)
+    raw_url = config.get_main_option("sqlalchemy.url")
+    url, connect_args = _clean_url_and_ssl(raw_url)
+    engine = create_async_engine(url, connect_args=connect_args)
     async with engine.connect() as connection:
         await connection.run_sync(do_run_migrations)
     await engine.dispose()

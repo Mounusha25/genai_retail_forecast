@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -15,17 +16,31 @@ _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
+def _clean_url_and_ssl(url: str) -> tuple[str, dict]:
+    """Strip SSL query params from URL and return connect_args for asyncpg."""
+    parsed = urlparse(url)
+    params = parse_qs(parsed.query)
+    ssl_keys = {"ssl", "sslmode", "channel_binding"}
+    needs_ssl = bool(params.keys() & ssl_keys) or parsed.hostname not in ("localhost", "127.0.0.1", None)
+    clean_params = {k: v for k, v in params.items() if k not in ssl_keys}
+    clean_url = urlunparse(parsed._replace(query=urlencode(clean_params, doseq=True)))
+    connect_args = {"ssl": True} if needs_ssl else {}
+    return clean_url, connect_args
+
+
 def _get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         cfg = get_settings()
+        clean_url, connect_args = _clean_url_and_ssl(cfg.database_url)
         _engine = create_async_engine(
-            cfg.database_url,
+            clean_url,
             pool_size=cfg.db_pool_size,
             max_overflow=cfg.db_max_overflow,
             pool_timeout=cfg.db_pool_timeout,
-            pool_pre_ping=True,          # validate connections before use
+            pool_pre_ping=True,  # validate connections before use
             echo=not cfg.is_production,  # SQL logging in dev only
+            connect_args=connect_args,
         )
     return _engine
 
