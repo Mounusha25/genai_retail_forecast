@@ -8,12 +8,13 @@ Run with:
     .venv/bin/python scripts/sync_forecasts.py
     .venv/bin/python scripts/sync_forecasts.py --product STORE_0001  # single store
 """
+
 from __future__ import annotations
 
 import argparse
 import asyncio
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -52,13 +53,11 @@ async def sync(product_id: str | None = None) -> None:
     async with async_session() as session:
         # Clear existing forecasts for the affected product(s)
         if product_id:
-            await session.execute(
-                delete(Forecast).where(Forecast.product_id == product_id.upper())
-            )
+            await session.execute(delete(Forecast).where(Forecast.product_id == product_id.upper()))
         else:
             await session.execute(delete(Forecast))
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         objects = [
             Forecast(
                 product_id=row.product_id,

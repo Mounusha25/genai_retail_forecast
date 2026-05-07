@@ -65,17 +65,38 @@ dev = [
 
 # ── Tooling ────────────────────────────────────────────────────
 [tool.ruff]
-line-length    = 100
+line-length    = 120
 target-version = "py312"
 
 [tool.ruff.lint]
 select  = ["E", "F", "I", "UP", "B", "SIM", "S"]
-ignore  = ["S101"]   # allow assert in tests
+ignore  = [
+  "S101",   # allow assert in tests
+  "S608",   # SQL expression — BigQuery uses @params; false positive for f-string table names
+  "S311",   # non-cryptographic random — fine for seed/test data generation
+  "S108",   # /tmp in GCS path (gs://bucket/tmp) — not a local temp file
+]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*"      = ["E402"]   # sys.path manipulation must precede project imports
+"streamlit_app.py" = ["E402"]
 
 [tool.mypy]
-python_version      = "3.12"
-strict              = true
+python_version         = "3.12"
+strict                 = true
 ignore_missing_imports = true
+
+# Apache Beam and LangChain ship no type stubs; disable strict checking there
+[[tool.mypy.overrides]]
+module = ["etl.*", "pipeline.*"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["rag.*"]
+disallow_untyped_defs   = false
+disallow_untyped_calls  = false
+warn_unused_ignores     = false
+warn_return_any         = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

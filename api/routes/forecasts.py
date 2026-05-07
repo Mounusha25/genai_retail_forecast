@@ -17,17 +17,14 @@ router = APIRouter(prefix="/forecasts", tags=["Forecasts"])
 )
 async def get_forecasts(product_id: str, db: DbSession) -> ForecastsResponse:
     result = await db.execute(
-        select(Forecast)
-        .where(Forecast.product_id == product_id.upper())
-        .order_by(Forecast.forecast_date)
+        select(Forecast).where(Forecast.product_id == product_id.upper()).order_by(Forecast.forecast_date)
     )
     rows = result.scalars().all()
 
     if not rows:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No forecasts found for product {product_id!r}. "
-                   "Ensure the pipeline has run at least once.",
+            detail=f"No forecasts found for product {product_id!r}. Ensure the pipeline has run at least once.",
         )
 
     return ForecastsResponse(

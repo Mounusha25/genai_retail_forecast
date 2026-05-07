@@ -1,7 +1,8 @@
 """Integration tests for the FastAPI endpoints using an in-memory SQLite DB."""
+
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
 from httpx import AsyncClient
@@ -17,7 +18,7 @@ async def _seed_forecast(db_session, product_id: str = "SKU-001") -> list[Foreca
             forecast_units=float(100 + i),
             ci_lower=float(90 + i),
             ci_upper=float(115 + i),
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(UTC),
         )
         for i in range(3)
     ]
@@ -30,7 +31,7 @@ async def _seed_narrative(db_session, product_id: str = "SKU-001") -> Narrative:
     row = Narrative(
         product_id=product_id,
         summary="Test executive summary.",
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
     )
     db_session.add(row)
     await db_session.commit()
@@ -38,6 +39,7 @@ async def _seed_narrative(db_session, product_id: str = "SKU-001") -> Narrative:
 
 
 # ── Health ─────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_health(client: AsyncClient):
@@ -49,6 +51,7 @@ async def test_health(client: AsyncClient):
 
 
 # ── Forecasts ──────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_get_forecasts_success(client: AsyncClient, db_session):
@@ -64,7 +67,7 @@ async def test_get_forecasts_success(client: AsyncClient, db_session):
 @pytest.mark.asyncio
 async def test_get_forecasts_case_insensitive(client: AsyncClient, db_session):
     await _seed_forecast(db_session, "SKU-011")
-    resp = await client.get("/v1/forecasts/sku-011")   # lower-case query
+    resp = await client.get("/v1/forecasts/sku-011")  # lower-case query
     assert resp.status_code == 200
 
 
@@ -75,6 +78,7 @@ async def test_get_forecasts_not_found(client: AsyncClient):
 
 
 # ── Narratives ─────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_get_narrative_success(client: AsyncClient, db_session):
@@ -93,6 +97,7 @@ async def test_get_narrative_not_found(client: AsyncClient):
 
 
 # ── Pipeline trigger ───────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_pipeline_trigger_forbidden_without_secret(client: AsyncClient):

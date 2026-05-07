@@ -1,7 +1,6 @@
 """Unit tests for the Beam ETL ParseSalesRow DoFn."""
-from __future__ import annotations
 
-import pytest
+from __future__ import annotations
 
 from etl.beam_pipeline import ParseSalesRow
 

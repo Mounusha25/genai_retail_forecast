@@ -6,8 +6,8 @@ from typing import Any
 
 @dataclass(slots=True, frozen=True)
 class SalesRow:
-    date: str          # ISO 8601: YYYY-MM-DD
-    product_id: str    # upper-case, e.g. "SKU-001"
+    date: str  # ISO 8601: YYYY-MM-DD
+    product_id: str  # upper-case, e.g. "SKU-001"
     store_id: str
     units_sold: float
     revenue: float
@@ -24,11 +24,11 @@ class SalesRow:
 
 BQ_SCHEMA = {
     "fields": [
-        {"name": "date",        "type": "DATE",    "mode": "REQUIRED"},
-        {"name": "product_id",  "type": "STRING",  "mode": "REQUIRED"},
-        {"name": "store_id",    "type": "STRING",  "mode": "REQUIRED"},
-        {"name": "units_sold",  "type": "FLOAT64", "mode": "REQUIRED"},
-        {"name": "revenue",     "type": "FLOAT64", "mode": "REQUIRED"},
+        {"name": "date", "type": "DATE", "mode": "REQUIRED"},
+        {"name": "product_id", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "store_id", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "units_sold", "type": "FLOAT64", "mode": "REQUIRED"},
+        {"name": "revenue", "type": "FLOAT64", "mode": "REQUIRED"},
     ]
 }
 

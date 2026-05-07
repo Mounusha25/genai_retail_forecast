@@ -4,6 +4,7 @@ Utility script: embed all business documents and persist the FAISS index.
 Usage:
     python -m scripts.build_index [--docs-dir data/business_docs]
 """
+
 from __future__ import annotations
 
 import argparse

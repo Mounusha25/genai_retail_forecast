@@ -5,8 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 from logging.config import fileConfig
-
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine

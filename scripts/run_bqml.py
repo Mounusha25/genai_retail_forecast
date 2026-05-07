@@ -11,6 +11,7 @@ Run with:
     python scripts/run_bqml.py
     python scripts/run_bqml.py --step train   # single step
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,14 +25,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from bq.client import BigQueryClient  # noqa: E402
 from config import get_settings  # noqa: E402
 
-
 STEPS = ["view", "train", "forecast", "evaluate"]
 
 
 def run_step(client: BigQueryClient, step: str) -> None:
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  Step: {step.upper()}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     t0 = time.perf_counter()
 
     if step == "view":

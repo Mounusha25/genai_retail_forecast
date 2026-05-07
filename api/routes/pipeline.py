@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
@@ -31,7 +31,7 @@ async def trigger_pipeline(
     run = PipelineRun(
         status="running",
         triggered_by=triggered_by,
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
     )
     db.add(run)
     await db.flush()  # get the auto-generated id
@@ -71,7 +71,7 @@ async def _execute_pipeline(run_id: int) -> None:
             run = await db.get(PipelineRun, run_id)
             if run:
                 run.status = "success"
-                run.finished_at = datetime.now(timezone.utc)
+                run.finished_at = datetime.now(UTC)
             await db.commit()
             logger.info("Pipeline run %d completed successfully", run_id)
 
@@ -80,6 +80,6 @@ async def _execute_pipeline(run_id: int) -> None:
             run = await db.get(PipelineRun, run_id)
             if run:
                 run.status = "failed"
-                run.finished_at = datetime.now(timezone.utc)
+                run.finished_at = datetime.now(UTC)
                 run.error = str(exc)[:2000]
             await db.commit()

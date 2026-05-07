@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -19,8 +20,9 @@ logger = logging.getLogger(__name__)
 
 # ── Lifespan ───────────────────────────────────────────────────
 
+
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     cfg = get_settings()
     configure_logging(log_level=cfg.log_level, json_logs=cfg.is_production)
     logger.info("Starting up | env=%s version=%s", cfg.environment, cfg.app_version)
@@ -32,15 +34,13 @@ async def lifespan(app: FastAPI):
 
 # ── App factory ────────────────────────────────────────────────
 
+
 def create_app() -> FastAPI:
     cfg = get_settings()
 
     app = FastAPI(
         title="GenAI Retail Forecasting API",
-        description=(
-            "Serves 30-day ARIMA_PLUS demand forecasts and "
-            "GPT-4 executive summaries for retail products."
-        ),
+        description=("Serves 30-day ARIMA_PLUS demand forecasts and GPT-4 executive summaries for retail products."),
         version=cfg.app_version,
         docs_url=None if cfg.is_production else "/docs",
         redoc_url=None if cfg.is_production else "/redoc",
@@ -68,9 +68,10 @@ def create_app() -> FastAPI:
 
     # ── Health check ───────────────────────────────────────────
     @app.get("/health", tags=["Health"], include_in_schema=False)
-    async def health() -> dict:
-        from db.session import _get_engine
+    async def health() -> dict[str, str]:
         from sqlalchemy import text
+
+        from db.session import _get_engine
 
         db_status = "ok"
         try:
@@ -86,7 +87,7 @@ def create_app() -> FastAPI:
     api_prefix = "/v1"
     app.include_router(forecasts_router, prefix=api_prefix)
     app.include_router(narratives_router, prefix=api_prefix)
-    app.include_router(pipeline_router,  prefix=api_prefix)
+    app.include_router(pipeline_router, prefix=api_prefix)
 
     return app
 

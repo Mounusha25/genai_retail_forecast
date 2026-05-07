@@ -3,8 +3,8 @@ from __future__ import annotations
 import csv
 import io
 import logging
+from collections.abc import Iterator
 from datetime import date
-from typing import Iterator
 
 import apache_beam as beam
 from apache_beam.io.gcp.bigquery import BigQueryDisposition, WriteToBigQuery
@@ -27,7 +27,7 @@ class ParseSalesRow(beam.DoFn):
     """
 
     def __init__(self) -> None:
-        self._parsed  = Metrics.counter("sales", "parsed")
+        self._parsed = Metrics.counter("sales", "parsed")
         self._skipped = Metrics.counter("sales", "skipped")
 
     def process(self, line: str) -> Iterator[dict]:  # type: ignore[override]
@@ -41,7 +41,7 @@ class ParseSalesRow(beam.DoFn):
 
             # Validate required fields
             for field in ("date", "product_id", "store_id"):
-                if not raw.get(field, "").strip():
+                if not (raw.get(field) or "").strip():
                     raise ValueError(f"Empty required field: {field!r}")
 
             # Validate date format
@@ -120,7 +120,7 @@ def run(
     """
     cfg = get_settings()
 
-    src   = input_pattern     or cfg.gcs_raw_path
+    src = input_pattern or cfg.gcs_raw_path
     table = destination_table or cfg.bq_sales_table
 
     pipeline_opts = build_pipeline_options(
@@ -136,10 +136,11 @@ def run(
     with beam.Pipeline(options=pipeline_opts) as pipeline:
         (
             pipeline
-            | "ReadRawCSV"     >> beam.io.ReadFromText(src, skip_header_lines=1)
-            | "FilterHeaders"  >> beam.ParDo(FilterHeaderLines())
-            | "ParseRows"      >> beam.ParDo(ParseSalesRow())
-            | "WriteToBQ"      >> WriteToBigQuery(
+            | "ReadRawCSV" >> beam.io.ReadFromText(src, skip_header_lines=1)
+            | "FilterHeaders" >> beam.ParDo(FilterHeaderLines())
+            | "ParseRows" >> beam.ParDo(ParseSalesRow())
+            | "WriteToBQ"
+            >> WriteToBigQuery(
                 table=table,
                 schema=BQ_SCHEMA,
                 create_disposition=BigQueryDisposition.CREATE_IF_NEEDED,
@@ -155,9 +156,9 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Retail sales ETL pipeline")
-    parser.add_argument("--runner",   default="DirectRunner")
-    parser.add_argument("--input",    default=None)
-    parser.add_argument("--table",    default=None)
+    parser.add_argument("--runner", default="DirectRunner")
+    parser.add_argument("--input", default=None)
+    parser.add_argument("--table", default=None)
     args = parser.parse_args()
 
     run(runner=args.runner, input_pattern=args.input, destination_table=args.table)

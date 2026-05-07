@@ -18,6 +18,7 @@ Usage
 # Custom batch size & worker concurrency
 .venv/bin/python scripts/sync_narratives.py --limit 50 --workers 2
 """
+
 from __future__ import annotations
 
 import argparse
@@ -26,7 +27,7 @@ import logging
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -53,52 +54,44 @@ logger = logging.getLogger("sync_narratives")
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _row_to_dict(row: Forecast) -> dict:
     return {
-        "forecast_date":  str(row.forecast_date),
+        "forecast_date": str(row.forecast_date),
         "forecast_units": row.forecast_units,
-        "ci_lower":       row.ci_lower,
-        "ci_upper":       row.ci_upper,
+        "ci_lower": row.ci_lower,
+        "ci_upper": row.ci_upper,
     }
 
 
 async def _fetch_product_ids(session: AsyncSession, limit: int) -> list[str]:
     """Return up to *limit* distinct product_ids that have forecast rows."""
-    result = await session.execute(
-        text(
-            "SELECT DISTINCT product_id FROM forecasts "
-            "ORDER BY product_id "
-            f"LIMIT {limit}"
-        )
-    )
+    result = await session.execute(text(f"SELECT DISTINCT product_id FROM forecasts ORDER BY product_id LIMIT {limit}"))
     return [row[0] for row in result.fetchall()]
 
 
 async def _fetch_forecasts_for(session: AsyncSession, product_id: str) -> list[Forecast]:
     result = await session.execute(
-        select(Forecast)
-        .where(Forecast.product_id == product_id)
-        .order_by(Forecast.forecast_date)
+        select(Forecast).where(Forecast.product_id == product_id).order_by(Forecast.forecast_date)
     )
     return list(result.scalars().all())
 
 
 async def _save_narrative(session: AsyncSession, product_id: str, summary: str) -> None:
     """Replace existing narrative (if any) and insert the fresh one."""
-    await session.execute(
-        delete(Narrative).where(Narrative.product_id == product_id)
-    )
+    await session.execute(delete(Narrative).where(Narrative.product_id == product_id))
     session.add(
         Narrative(
             product_id=product_id,
             summary=summary,
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(UTC),
         )
     )
     await session.commit()
 
 
 # ── Core worker (sync — runs in thread pool) ──────────────────────────────────
+
 
 def _generate_one(
     chain: NarrativeChain,
@@ -118,6 +111,7 @@ def _generate_one(
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+
 
 async def sync(
     product_id: str | None,
@@ -166,15 +160,13 @@ async def sync(
         futures = {}
         for i, (pid, rows) in enumerate(pid_to_rows.items()):
             if i > 0 and delay > 0:
-                time.sleep(delay)   # rate-limit Groq free tier
+                time.sleep(delay)  # rate-limit Groq free tier
             fut = pool.submit(_generate_one, chain, pid, rows)
             futures[fut] = pid
 
         total = len(futures)
-        done  = 0
-        for fut in as_completed(futures):
+        for done, fut in enumerate(as_completed(futures), start=1):
             pid, result = fut.result()
-            done += 1
             if isinstance(result, Exception):
                 logger.error("[%d/%d] FAILED %s: %s", done, total, pid, result)
             else:

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from string import Template
 from typing import Any
 
 from google.cloud import bigquery
@@ -38,11 +37,11 @@ class BigQueryClient:
 
     def __init__(self) -> None:
         cfg = get_settings()
-        self._project  = cfg.google_cloud_project
-        self._dataset  = cfg.bq_dataset
+        self._project = cfg.google_cloud_project
+        self._dataset = cfg.bq_dataset
         self._location = cfg.bq_location
-        self._horizon  = cfg.forecast_horizon_days
-        self._client   = bigquery.Client(project=self._project, location=self._location)
+        self._horizon = cfg.forecast_horizon_days
+        self._client = bigquery.Client(project=self._project, location=self._location)
 
     # ── Internal helpers ───────────────────────────────────────
 

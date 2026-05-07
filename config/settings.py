@@ -70,9 +70,7 @@ class Settings(BaseSettings):
     @classmethod
     def _validate_db_url(cls, v: str) -> str:
         if not v.startswith("postgresql+asyncpg://"):
-            raise ValueError(
-                "database_url must use the postgresql+asyncpg:// scheme for async support"
-            )
+            raise ValueError("database_url must use the postgresql+asyncpg:// scheme for async support")
         return v
 
     @property
@@ -106,4 +104,4 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    return Settings()
+    return Settings()  # type: ignore[call-arg]  # pydantic-settings reads env vars, not ctor args

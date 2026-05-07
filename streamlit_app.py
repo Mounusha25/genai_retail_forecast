@@ -9,10 +9,10 @@ Launch:
 
 Requires the FastAPI backend to be running on localhost:8080.
 """
+
 from __future__ import annotations
 
 import os
-import time
 from datetime import datetime
 
 import plotly.graph_objects as go
@@ -30,9 +30,9 @@ st.set_page_config(
 API_BASE = os.getenv("API_BASE_URL", "http://localhost:8080")
 
 # ── Colour palette ────────────────────────────────────────────────────────────
-BLUE   = "#1f77b4"
+BLUE = "#1f77b4"
 ORANGE = "#ff7f0e"
-GREY   = "#adb5bd"
+GREY = "#adb5bd"
 
 # ── Custom CSS ────────────────────────────────────────────────────────────────
 st.markdown(
@@ -91,6 +91,7 @@ st.markdown(
 
 # ── API helpers ───────────────────────────────────────────────────────────────
 
+
 @st.cache_data(ttl=120, show_spinner=False)
 def fetch_forecasts(product_id: str) -> dict | None:
     try:
@@ -132,6 +133,7 @@ def fetch_store_list() -> list[str]:
 
 # ── Layout helpers ────────────────────────────────────────────────────────────
 
+
 def _health_badge(status: str) -> str:
     if status == "ok":
         return '<span class="badge-ok">● Healthy</span>'
@@ -141,8 +143,8 @@ def _health_badge(status: str) -> str:
 
 
 def _build_forecast_chart(forecasts: list[dict]) -> go.Figure:
-    dates  = [r["forecast_date"] for r in forecasts]
-    units  = [r["forecast_units"] for r in forecasts]
+    dates = [r["forecast_date"] for r in forecasts]
+    units = [r["forecast_units"] for r in forecasts]
     lowers = [r.get("ci_lower") for r in forecasts]
     uppers = [r.get("ci_upper") for r in forecasts]
 
@@ -150,27 +152,31 @@ def _build_forecast_chart(forecasts: list[dict]) -> go.Figure:
 
     # Confidence interval band
     if any(v is not None for v in uppers):
-        fig.add_trace(go.Scatter(
-            x=dates + dates[::-1],
-            y=uppers + lowers[::-1],
-            fill="toself",
-            fillcolor="rgba(31,119,180,0.12)",
-            line=dict(color="rgba(255,255,255,0)"),
-            hoverinfo="skip",
-            name="80% CI",
-            showlegend=True,
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=dates + dates[::-1],
+                y=uppers + lowers[::-1],
+                fill="toself",
+                fillcolor="rgba(31,119,180,0.12)",
+                line=dict(color="rgba(255,255,255,0)"),
+                hoverinfo="skip",
+                name="80% CI",
+                showlegend=True,
+            )
+        )
 
     # Forecast line
-    fig.add_trace(go.Scatter(
-        x=dates,
-        y=units,
-        mode="lines+markers",
-        line=dict(color=BLUE, width=2.5),
-        marker=dict(size=5),
-        name="Forecast Units",
-        hovertemplate="<b>%{x}</b><br>Units: %{y:,.0f}<extra></extra>",
-    ))
+    fig.add_trace(
+        go.Scatter(
+            x=dates,
+            y=units,
+            mode="lines+markers",
+            line=dict(color=BLUE, width=2.5),
+            marker=dict(size=5),
+            name="Forecast Units",
+            hovertemplate="<b>%{x}</b><br>Units: %{y:,.0f}<extra></extra>",
+        )
+    )
 
     fig.update_layout(
         title=None,
@@ -240,9 +246,7 @@ st.markdown(
 )
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
-tab_forecast, tab_narrative, tab_about = st.tabs(
-    ["📊 Demand Forecast", "🤖 AI Narrative", "ℹ️ About the Project"]
-)
+tab_forecast, tab_narrative, tab_about = st.tabs(["📊 Demand Forecast", "🤖 AI Narrative", "ℹ️ About the Project"])
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 1 — Forecast
@@ -265,10 +269,10 @@ with tab_forecast:
         else:
             # ── KPI row ────────────────────────────────────────────────────
             units_vals = [f["forecast_units"] for f in forecasts]
-            avg_daily  = sum(units_vals) / len(units_vals)
-            total_30d  = sum(units_vals)
-            peak_day   = max(forecasts, key=lambda r: r["forecast_units"])
-            low_day    = min(forecasts, key=lambda r: r["forecast_units"])
+            avg_daily = sum(units_vals) / len(units_vals)
+            total_30d = sum(units_vals)
+            peak_day = max(forecasts, key=lambda r: r["forecast_units"])
+            low_day = min(forecasts, key=lambda r: r["forecast_units"])
 
             k1, k2, k3, k4 = st.columns(4)
             with k1:
@@ -314,10 +318,10 @@ with tab_forecast:
                 st.dataframe(
                     forecasts,
                     column_config={
-                        "forecast_date":  st.column_config.DateColumn("Date"),
+                        "forecast_date": st.column_config.DateColumn("Date"),
                         "forecast_units": st.column_config.NumberColumn("Units", format="%.0f"),
-                        "ci_lower":       st.column_config.NumberColumn("CI Lower", format="%.0f"),
-                        "ci_upper":       st.column_config.NumberColumn("CI Upper", format="%.0f"),
+                        "ci_lower": st.column_config.NumberColumn("CI Lower", format="%.0f"),
+                        "ci_upper": st.column_config.NumberColumn("CI Upper", format="%.0f"),
                     },
                     hide_index=True,
                     use_container_width=True,
@@ -372,8 +376,7 @@ with tab_narrative:
     # ── Live generation ────────────────────────────────────────────────────
     st.subheader("Generate narrative now")
     st.caption(
-        "This calls the local Python chain directly (Groq API + FAISS). "
-        "First call loads the embedding model (~3 s)."
+        "This calls the local Python chain directly (Groq API + FAISS). First call loads the embedding model (~3 s)."
     )
 
     if st.button(f"⚡ Generate narrative for {selected_store}", use_container_width=False):
@@ -388,12 +391,13 @@ with tab_narrative:
 
                     sys.path.insert(0, str(Path(__file__).resolve().parent))
                     from dotenv import load_dotenv  # type: ignore[import]
+
                     load_dotenv(Path(__file__).resolve().parent / ".env", override=False)
 
                     from rag.narrative_chain import NarrativeChain  # type: ignore[import]
 
                     chain = NarrativeChain()
-                    rows  = forecast_data["forecasts"]
+                    rows = forecast_data["forecasts"]
                     text_out = chain.generate(selected_store, rows)
                     st.markdown(
                         f'<div class="narrative-box">{text_out}</div>',
