@@ -42,7 +42,7 @@ def do_run_migrations(connection):  # type: ignore[no-untyped-def]
         context.run_migrations()
 
 
-def _clean_url_and_ssl(url: str) -> tuple[str, dict]:  # type: ignore[type-arg]
+def _clean_url_and_ssl(url: str) -> tuple[str, dict[str, object]]:
     parsed = urlparse(url)
     params = parse_qs(parsed.query)
     ssl_keys = {"ssl", "sslmode", "channel_binding"}
@@ -54,6 +54,7 @@ def _clean_url_and_ssl(url: str) -> tuple[str, dict]:  # type: ignore[type-arg]
 
 async def run_async_migrations() -> None:
     raw_url = config.get_main_option("sqlalchemy.url")
+    assert raw_url is not None
     url, connect_args = _clean_url_and_ssl(raw_url)
     engine = create_async_engine(url, connect_args=connect_args)
     async with engine.connect() as connection:

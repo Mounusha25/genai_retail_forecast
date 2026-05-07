@@ -16,7 +16,7 @@ _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
-def _clean_url_and_ssl(url: str) -> tuple[str, dict]:
+def _clean_url_and_ssl(url: str) -> tuple[str, dict[str, object]]:
     """Strip SSL query params from URL and return connect_args for asyncpg."""
     parsed = urlparse(url)
     params = parse_qs(parsed.query)
@@ -24,7 +24,7 @@ def _clean_url_and_ssl(url: str) -> tuple[str, dict]:
     needs_ssl = bool(params.keys() & ssl_keys) or parsed.hostname not in ("localhost", "127.0.0.1", None)
     clean_params = {k: v for k, v in params.items() if k not in ssl_keys}
     clean_url = urlunparse(parsed._replace(query=urlencode(clean_params, doseq=True)))
-    connect_args = {"ssl": True} if needs_ssl else {}
+    connect_args: dict[str, object] = {"ssl": True} if needs_ssl else {}
     return clean_url, connect_args
 
 
