@@ -1,6 +1,8 @@
+![GenAI Retail Forecasting Engine](genai_retail_forecast_cover.png)
+
 # GenAI Retail Demand Forecasting Engine
 
-> **Production-grade ML + Generative AI system** that ingests raw retail sales, trains time-series forecasting models on BigQuery ML, and delivers 30-day demand forecasts alongside LLM-generated executive narratives — all through a FastAPI backend and a real-time Streamlit BI dashboard.
+> **Production-grade ML system** that ingests raw retail sales, trains time-series forecasting models on BigQuery ML, and delivers 30-day demand forecasts through a FastAPI backend and a real-time Streamlit BI dashboard.
 
 ---
 
@@ -12,10 +14,9 @@
 4. [Component Breakdown](#component-breakdown)
    - [1. ETL Pipeline (Apache Beam)](#1-etl-pipeline-apache-beam)
    - [2. BigQuery ML Forecasting](#2-bigquery-ml-forecasting)
-   - [3. RAG + Narrative Engine (LangChain)](#3-rag--narrative-engine-langchain)
-   - [4. FastAPI Backend](#4-fastapi-backend)
-   - [5. Streamlit BI Dashboard](#5-streamlit-bi-dashboard)
-   - [6. PostgreSQL Data Store](#6-postgresql-data-store)
+   - [3. FastAPI Backend](#3-fastapi-backend)
+   - [4. Streamlit BI Dashboard](#4-streamlit-bi-dashboard)
+   - [5. PostgreSQL Data Store](#5-postgresql-data-store)
 5. [Tech Stack](#tech-stack)
 6. [Project Structure](#project-structure)
 7. [Data Flow](#data-flow)
@@ -35,9 +36,7 @@ This project demonstrates a complete, end-to-end **MLOps + GenAI** pipeline buil
 |-------|-----------|---------|
 | Ingestion | Apache Beam → GCS → BigQuery | Clean and load raw sales CSVs |
 | Forecasting | BigQuery ML ARIMA_PLUS | Train and generate 30-day demand forecasts |
-| RAG Index | FAISS + Sentence-Transformers | Build searchable knowledge base from business docs |
-| Narratives | LangChain + LLaMA 3.3-70B (Groq) | GPT-powered executive summaries per store |
-| Backend API | FastAPI + asyncpg + PostgreSQL | Serve forecasts and narratives with async I/O |
+| Backend API | FastAPI + asyncpg + PostgreSQL | Serve forecasts with async I/O |
 | Dashboard | Streamlit + Plotly | 5-tab real-time BI dashboard with 1,115-store fleet |
 | CI/CD | GitHub Actions + Cloud Run + WIF | Zero-downtime deploy on every semver tag |
 
@@ -54,7 +53,6 @@ The Streamlit dashboard provides five tabs of business intelligence:
 | 🌐 **Network Overview** | Fleet KPIs, daily demand trend, day-of-week patterns, Top-15 stores, store tier distribution (High/Mid/Low), volume histogram with P25/P50/P75 lines, weekly bar chart, risk-vs-volume scatter |
 | 📊 **Store Forecast** | Per-store 5 KPIs, forecast line + 80% CI band + peak marker, weekly bar, DOW pattern, benchmark bullet chart (vs P25/P50/P75/P90), week-over-week change, CSV export |
 | 🔀 **Compare** | Multi-store overlay chart, comparison summary table with percentile ranks across all 1,115 stores |
-| 🤖 **AI Narrative** | LLM-generated executive summary per store, with live regeneration button |
 | ℹ️ **About** | System architecture, tech stack, dataset info, quick-start guide |
 
 ```bash
@@ -104,44 +102,25 @@ streamlit run streamlit_app.py --server.port 8501
 │                     exported to GCS → synced to PostgreSQL                   │
 └──────────────────────────────────────────────────────────────────────────────┘
                                           │
-                     ┌────────────────────┴──────────────────┐
-                     ▼                                        ▼
-┌──────────────────────────────┐     ┌──────────────────────────────────────┐
-│     RAG KNOWLEDGE BASE       │     │         POSTGRESQL (Docker)          │
-│                              │     │                                      │
-│  Business docs (PDF/TXT/MD)  │     │  ┌──────────────┐ ┌──────────────┐  │
-│         │                    │     │  │  forecasts   │ │  narratives  │  │
-│  RecursiveCharacterSplitter  │     │  │  product_id  │ │  product_id  │  │
-│  chunk=600 / overlap=80      │     │  │  date        │ │  summary     │  │
-│         │                    │     │  │  forecast    │ │  model_used  │  │
-│  HuggingFace Embeddings      │     │  │  ci_lower    │ │  generated   │  │
-│  (all-MiniLM-L6-v2)          │     │  │  ci_upper    │ └──────────────┘  │
-│         │                    │     │  └──────────────┘                   │
-│   FAISS Index (disk)         │     │  ┌───────────────────────────────┐  │
-│  data/faiss_index/           │     │  │     pipeline_runs (audit)     │  │
-└──────────────┬───────────────┘     └──────────────────────────────────┘  │
-               │                                          │                  │
-               ▼                                          │                  │
-┌──────────────────────────────┐                          │                  │
-│     NARRATIVE ENGINE         │                          │                  │
-│                              │                          │                  │
-│  LangChain RAG Chain:        │                          │                  │
-│  product_id → MMR retriever  │◄─── forecast rows ───────┘                  │
-│      → ChatPromptTemplate    │                                             │
-│      → LLaMA 3.3-70B (Groq) │                                             │
-│      → StrOutputParser       │                                             │
-│  3-paragraph executive brief │                                             │
-│  saved to narratives table   │                                             │
-└──────────────────────────────┘                                             │
-               │                                                             │
-               └──────────────────────┐                                      │
-                                      ▼                                      │
+                                          ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          POSTGRESQL (Docker)                                 │
+│                                                                              │
+│  ┌──────────────────────────┐   ┌───────────────────────────────────────┐   │
+│  │       forecasts          │   │          pipeline_runs (audit)        │   │
+│  │  product_id              │   │  status · triggered_by                │   │
+│  │  forecast_date           │   │  started_at · finished_at · error     │   │
+│  │  forecast_units          │   └───────────────────────────────────────┘   │
+│  │  ci_lower / ci_upper     │                                                │
+│  └──────────────────────────┘                                                │
+└──────────────────────────────────────────────────────────────────────────────┘
+               │
+               ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                            FASTAPI BACKEND                                   │
 │                                                                              │
 │  GET /health                   — DB connectivity check                       │
 │  GET /v1/forecasts/{id}        — 30-day forecast rows + CI bands             │
-│  GET /v1/narrative/{id}        — latest LLM executive summary                │
 │  POST /v1/pipeline/run         — trigger full pipeline (authenticated)       │
 │                                                                              │
 │  • asyncpg connection pool (size=10, overflow=20)                            │
@@ -155,7 +134,7 @@ streamlit run streamlit_app.py --server.port 8501
 │                        STREAMLIT BI DASHBOARD                                │
 │                                                                              │
 │  Direct psycopg2 queries to PostgreSQL (fleet-wide analytics)                │
-│  + FastAPI calls (per-store forecast + narrative)                            │
+│  + FastAPI calls (per-store forecast)                                        │
 │  5-tab Plotly dashboard · @st.cache_data TTL caching                         │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -215,47 +194,7 @@ The `ARIMA_PLUS` model automatically detects trend, seasonality, and holiday eff
 
 ---
 
-### 3. RAG + Narrative Engine (LangChain)
-
-**Files:** `rag/narrative_chain.py`, `rag/vector_store.py`, `rag/prompts.py`
-
-#### Vector Store Build (`rag/vector_store.py`)
-1. Loads all PDF / TXT / Markdown from `data/business_docs/`
-2. Chunks with `RecursiveCharacterTextSplitter` (chunk=600, overlap=80 tokens)
-3. Embeds with `all-MiniLM-L6-v2` (local, free) or `text-embedding-3-small` (OpenAI)
-4. Persists a FAISS index to `data/faiss_index/`
-
-#### Narrative Generation (`rag/narrative_chain.py`)
-```
-product_id
-    │
-    ▼
-MMR Retriever (k=5, fetch_k=15)  ← FAISS index
-    │
-    ▼
-ChatPromptTemplate (SYSTEM + HUMAN)
-    │
-    ▼
-LLaMA 3.3-70B via Groq API  (free tier, 70B params)
-    │
-    ▼
-StrOutputParser → 3-paragraph executive brief
-```
-
-**MMR (Maximum Marginal Relevance)** is used instead of plain similarity search to ensure retrieved context chunks are both relevant *and* diverse — avoiding redundant passages being fed to the LLM.
-
-**Retry policy:** `tenacity` with exponential back-off (2s → 30s, 3 attempts) handles Groq rate limits gracefully.
-
-**LLM providers are swappable** — change `LLM_PROVIDER` in `.env` with no code changes:
-
-| Provider | Model | Notes |
-|----------|-------|-------|
-| `groq` | `llama-3.3-70b-versatile` | Default — free tier, fast |
-| `openai` | `gpt-4o` | Best quality, paid |
-
----
-
-### 4. FastAPI Backend
+### 3. FastAPI Backend
 
 **Files:** `api/main.py`, `api/routes/`, `api/schemas.py`, `api/dependencies.py`
 
@@ -273,7 +212,6 @@ A fully async REST API with production-grade features:
 ```
 GET  /health                    → {"status": "ok", "db": "ok", "version": "1.0.0"}
 GET  /v1/forecasts/{product_id} → ForecastsResponse (30 rows + CI bands)
-GET  /v1/narrative/{product_id} → NarrativeResponse (latest LLM summary)
 POST /v1/pipeline/run           → 202 Accepted (authenticated, async background job)
 GET  /docs                      → Swagger UI (dev only)
 GET  /redoc                     → ReDoc (dev only)
@@ -281,7 +219,7 @@ GET  /redoc                     → ReDoc (dev only)
 
 ---
 
-### 5. Streamlit BI Dashboard
+### 4. Streamlit BI Dashboard
 
 **File:** `streamlit_app.py`
 
@@ -291,6 +229,10 @@ A 1,200-line professional BI dashboard built with Streamlit + Plotly. Uses **dir
 - `@st.cache_data(ttl=300)` on all DB queries — prevents redundant database hits
 - `_pg_dsn()` strips SQLAlchemy DSN prefixes for psycopg2 compatibility
 - Graceful degradation — all charts show `st.warning` if DB is unreachable
+
+---
+
+### 5. PostgreSQL Data Store
 
 **Fleet data (from PostgreSQL):**
 
@@ -303,10 +245,6 @@ A 1,200-line professional BI dashboard built with Streamlit + Plotly. Uses **dir
 | Top store | STORE_1114 (105.7K) |
 | Busiest weekday | Monday (avg 817 units/store) |
 | Store tier distribution | 562 Low / 536 Mid / 17 High |
-
----
-
-### 6. PostgreSQL Data Store
 
 **Schema (`db/models.py`):**
 
@@ -322,15 +260,6 @@ CREATE TABLE forecasts (
     generated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX ix_forecasts_product_date ON forecasts(product_id, forecast_date);
-
--- LLM executive summaries
-CREATE TABLE narratives (
-    id           SERIAL PRIMARY KEY,
-    product_id   VARCHAR(64) NOT NULL,
-    summary      TEXT NOT NULL,
-    generated_at TIMESTAMPTZ NOT NULL
-);
-CREATE INDEX ix_narratives_product_generated ON narratives(product_id, generated_at);
 
 -- Pipeline execution audit log
 CREATE TABLE pipeline_runs (
@@ -421,25 +350,20 @@ genai_retail_forecasting/
 │
 ├── rag/
 │   ├── vector_store.py         ← Build/load FAISS index
-│   ├── narrative_chain.py      ← LangChain RAG → LLM narrative generation
-│   └── prompts.py              ← System + human prompt templates
+│   ├── narrative_chain.py      ← LangChain RAG → narrative generation
+│   └── prompts.py              ← Prompt templates
 │
 ├── scripts/
 │   ├── seed_data.py            ← Generate synthetic Rossmann-style sales data
 │   ├── sync_forecasts.py       ← BQ → PostgreSQL forecast sync
-│   ├── sync_narratives.py      ← Batch narrative generation for all stores
-│   ├── build_index.py          ← Build FAISS vector index from docs
 │   └── run_bqml.py             ← Execute BQ ML SQL files
 │
 ├── tests/
 │   ├── conftest.py             ← pytest fixtures (async DB, mocked settings)
 │   ├── test_api.py             ← FastAPI endpoint tests (httpx AsyncClient)
-│   ├── test_etl.py             ← Beam pipeline unit tests
-│   └── test_rag.py             ← RAG chain tests (mocked LLM)
+│   └── test_etl.py             ← Beam pipeline unit tests
 │
 ├── data/
-│   ├── business_docs/          ← PDFs/TXTs for RAG corpus (gitignored)
-│   ├── faiss_index/            ← Built FAISS index (gitignored)
 │   └── sample_sales/           ← Small CSV for local dev/testing
 │
 ├── streamlit_app.py            ← 5-tab Streamlit BI dashboard
@@ -469,15 +393,9 @@ Step 3  make bqml-forecast
 Step 4  make sync-forecasts
         BigQuery forecast rows → PostgreSQL forecasts table
 
-Step 5  make build-index
-        business_docs/ + forecast summaries → chunked → embedded → FAISS index
-
-Step 6  make sync-narratives
-        For each store: retrieve RAG context + forecasts → LLaMA 3.3-70B → PostgreSQL narratives
-
-Step 7  Dashboard auto-refreshes
+Step 5  Dashboard auto-refreshes
         Streamlit reads PostgreSQL directly (fleet analytics, @st.cache_data TTL=300s)
-        FastAPI serves per-store forecasts + narratives on demand
+        FastAPI serves per-store forecasts on demand
 ```
 
 This full pipeline can also be triggered via HTTP:
@@ -557,16 +475,10 @@ make migrate               # alembic upgrade head
 # 5. Seed local data (generates synthetic Rossmann-style sales)
 python scripts/seed_data.py
 
-# 6. Build the RAG index (put PDFs/TXTs in data/business_docs/ first)
-make build-index
-
-# 7. Generate narratives
-make sync-narratives
-
-# 8. Start the API
+# 6. Start the API
 make run                   # uvicorn on localhost:8080
 
-# 9. Open the dashboard
+# 7. Open the dashboard
 make ui                    # streamlit on localhost:8501
 ```
 
@@ -586,8 +498,6 @@ make etl-gcp          # Run Beam ETL on Dataflow (GCP billing)
 make bqml-train       # Train ARIMA_PLUS model in BigQuery
 make bqml-forecast    # Generate 30-day forecasts
 make sync-forecasts   # Sync BQ forecasts → PostgreSQL
-make build-index      # Build FAISS RAG index
-make sync-narratives  # Generate LLM narratives for all stores
 ```
 
 ---
@@ -602,14 +512,6 @@ GOOGLE_APPLICATION_CREDENTIALS=       # blank = use gcloud ADC
 
 # ── Database ────────────────────────────────────────────────
 DATABASE_URL=postgresql+asyncpg://retail:retail@localhost:5432/retail
-
-# ── LLM Provider ────────────────────────────────────────────
-LLM_PROVIDER=groq                      # groq | openai
-GROQ_API_KEY=gsk_...                   # free at console.groq.com
-OPENAI_API_KEY=sk-...                  # paid at platform.openai.com
-
-# ── Embeddings ──────────────────────────────────────────────
-EMBEDDING_PROVIDER=local               # local (free) | openai (paid)
 
 # ── Security ────────────────────────────────────────────────
 SCHEDULER_SECRET=your-random-hex-secret
@@ -644,15 +546,6 @@ ENVIRONMENT=development                # development | production
 }
 ```
 
-### `GET /v1/narrative/{product_id}`
-```json
-{
-  "product_id": "STORE_0001",
-  "summary": "STORE_0001 is forecast to sell approximately 14,619 units over the next 30 days...",
-  "generated_at": "2026-05-07T01:00:00Z"
-}
-```
-
 ### `POST /v1/pipeline/run` _(authenticated)_
 ```bash
 curl -X POST http://localhost:8080/v1/pipeline/run \
@@ -672,15 +565,6 @@ Beam's unified programming model means the same pipeline code runs locally (`Dir
 **Why BigQuery ML over a Python model?**
 ARIMA_PLUS in BQML trains one model *per product* (1,115+ models) automatically, in parallel, with zero infrastructure management. The same SQL call handles model versioning, training, forecasting, and evaluation.
 
-**Why FAISS over a managed vector DB?**
-For a weekly-rebuild RAG index of business documents, FAISS (CPU) is instant, free, and portable. Chroma or Pinecone can be dropped in by changing one line in `rag/vector_store.py`.
-
-**Why LangChain with MMR retrieval?**
-Maximum Marginal Relevance ensures the k=5 retrieved chunks are diverse rather than semantically redundant — producing richer LLM context for nuanced executive summaries.
-
-**Why Groq for LLM inference?**
-Groq's LPU hardware delivers LLaMA 3.3-70B inference at ~800 tokens/second on the free tier — fast enough for real-time dashboard regeneration. Swapping to GPT-4o requires only an env var change.
-
 **Why async FastAPI + asyncpg?**
 Async I/O allows the API to handle dozens of concurrent forecast requests without thread blocking. The connection pool (size=10, overflow=20) handles burst traffic from the Streamlit dashboard's parallel chart loads.
 
@@ -691,9 +575,9 @@ WIF eliminates the need to store long-lived GCP service account JSON keys as Git
 
 ## Author
 
-**Mounusha** — Data Engineering & GenAI  
-Stack: Python · FastAPI · BigQuery ML · LangChain · Apache Beam · Streamlit · GCP
+**Mounusha** — Data Engineering & ML  
+Stack: Python · FastAPI · BigQuery ML · Apache Beam · Streamlit · GCP
 
 ---
 
-*Built as a portfolio-grade end-to-end ML + GenAI system demonstrating production patterns: async APIs, streaming ETL, ML pipelines, RAG, LLM integration, containerisation, and CI/CD with keyless GCP deployment.*
+*Built as a portfolio-grade end-to-end ML system demonstrating production patterns: async APIs, streaming ETL, ML pipelines, containerisation, and CI/CD with keyless GCP deployment.*
