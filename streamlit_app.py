@@ -19,7 +19,6 @@ import psycopg2.extras
 import requests
 import streamlit as st
 from dotenv import load_dotenv
-from plotly.subplots import make_subplots
 
 load_dotenv(override=False)
 
