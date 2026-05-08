@@ -4,6 +4,7 @@ GenAI Retail Forecasting Engine · Rossmann Store Sales (1,115 stores)
 
 Launch:  .venv/bin/streamlit run streamlit_app.py   (or: make ui)
 """
+
 from __future__ import annotations
 
 import io
@@ -30,28 +31,32 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-API_BASE   = os.getenv("API_BASE_URL", "http://localhost:8080")
+API_BASE = os.getenv("API_BASE_URL", "http://localhost:8080")
 DB_URL_RAW = os.getenv("DATABASE_URL", "postgresql+asyncpg://retail:retail@localhost:5432/retail")
 
 # ── Colour system ──────────────────────────────────────────────────────────────
-C_BLUE   = "#2563EB"
-C_RED    = "#DC2626"
-C_GREEN  = "#16A34A"
+C_BLUE = "#2563EB"
+C_RED = "#DC2626"
+C_GREEN = "#16A34A"
 C_PURPLE = "#9333EA"
 C_ORANGE = "#EA580C"
-C_TEAL   = "#0891B2"
-C_AMBER  = "#D97706"
+C_TEAL = "#0891B2"
+C_AMBER = "#D97706"
 
 PALETTE = [C_BLUE, C_RED, C_GREEN, C_PURPLE, C_ORANGE]
 PALETTE_FILL = [
-    "rgba(37,99,235,0.10)", "rgba(220,38,38,0.10)",
-    "rgba(22,163,74,0.10)", "rgba(147,51,234,0.10)", "rgba(234,88,12,0.10)",
+    "rgba(37,99,235,0.10)",
+    "rgba(220,38,38,0.10)",
+    "rgba(22,163,74,0.10)",
+    "rgba(147,51,234,0.10)",
+    "rgba(234,88,12,0.10)",
 ]
 
 TIER_COLORS = {"High (>60K)": C_GREEN, "Mid (20-60K)": C_BLUE, "Low (<20K)": C_AMBER}
 
 # ── Global CSS ─────────────────────────────────────────────────────────────────
-st.markdown("""
+st.markdown(
+    """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
@@ -178,12 +183,15 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
 #MainMenu, footer, header { visibility:hidden; }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Database helpers (sync psycopg2 — analytics-only queries from dashboard)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 
 def _pg_dsn() -> str:
     """Convert SQLAlchemy URL to plain psycopg2 DSN (strips driver + query params)."""
@@ -264,6 +272,7 @@ def load_weekly_fleet() -> pd.DataFrame:
 # API helpers
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+
 @st.cache_data(ttl=120, show_spinner=False)
 def fetch_forecasts(product_id: str) -> dict | None:
     try:
@@ -295,6 +304,7 @@ def fetch_health() -> dict:
 # Chart helpers
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+
 def _bg_fig(h: int = 360) -> dict:
     """Common Plotly layout dict: white bg, tight margins."""
     return dict(
@@ -314,9 +324,9 @@ def _tier(val: float) -> str:
 
 
 def _badge(status: str) -> str:
-    cls   = {"ok": "badge-ok",  "unreachable": "badge-err"}.get(status, "badge-warn")
-    icon  = {"ok": "●",         "unreachable": "✖"         }.get(status, "⚠")
-    label = {"ok": "Live",      "unreachable": "Down"       }.get(status, "Degraded")
+    cls = {"ok": "badge-ok", "unreachable": "badge-err"}.get(status, "badge-warn")
+    icon = {"ok": "●", "unreachable": "✖"}.get(status, "⚠")
+    label = {"ok": "Live", "unreachable": "Down"}.get(status, "Degraded")
     return f'<span class="{cls}">{icon} {label}</span>'
 
 
@@ -362,13 +372,16 @@ def _weekly_agg(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # Clear stale localStorage collapsed state so sidebar always starts open
-st.iframe("""
+st.iframe(
+    """
 <script>
   Object.keys(window.parent.localStorage)
     .filter(function(k){ return k.startsWith('stSidebarCollapsed'); })
     .forEach(function(k){ window.parent.localStorage.removeItem(k); });
 </script>
-""", height=0)
+""",
+    height=0,
+)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Sidebar
@@ -388,9 +401,9 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("##### 🏪 Store Selector")
-    store_search  = st.text_input("Search", value="", placeholder="e.g. 0042 or 1114")
-    all_stores    = [f"STORE_{i:04d}" for i in range(1, 1116)]
-    filtered      = [s for s in all_stores if store_search.upper() in s] if store_search else all_stores
+    store_search = st.text_input("Search", value="", placeholder="e.g. 0042 or 1114")
+    all_stores = [f"STORE_{i:04d}" for i in range(1, 1116)]
+    filtered = [s for s in all_stores if store_search.upper() in s] if store_search else all_stores
     primary_store = st.selectbox("Primary store", options=filtered, index=0, label_visibility="collapsed")
 
     st.markdown("---")
@@ -418,10 +431,10 @@ with st.sidebar:
 # Pre-load fleet data (all cached at module level for dashboard speed)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-fleet_df      = load_fleet_summary()
-dow_df        = load_dow_pattern()
-trend_df      = load_fleet_daily_trend()
-weekly_fleet  = load_weekly_fleet()
+fleet_df = load_fleet_summary()
+dow_df = load_dow_pattern()
+trend_df = load_fleet_daily_trend()
+weekly_fleet = load_weekly_fleet()
 
 # Per-store API data for selected stores
 all_selected = [primary_store] + compare_stores
@@ -439,23 +452,32 @@ primary_fc = store_api.get(primary_store, [])
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 compare_pill = f" + {', '.join(compare_stores)}" if compare_stores else ""
-st.markdown(f"""
+st.markdown(
+    f"""
 <div class="hero">
   <h1>Rossmann Retail Demand Intelligence</h1>
   <p>30-day ARIMA_PLUS forecasts · LLaMA 3.3·70B AI narratives · 1,115 stores across Germany</p>
   <span class="pill">📍 {primary_store}{compare_pill}</span>
   <span class="pill" style="margin-left:8px">🗓 Horizon: Aug–Sep 2015</span>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Tabs
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-tab_network, tab_store, tab_compare, tab_narrative, tab_about = st.tabs([
-    "🌐 Network Overview", "📊 Store Forecast", "🔀 Compare", "🤖 AI Narrative", "ℹ️ About",
-])
+tab_network, tab_store, tab_compare, tab_narrative, tab_about = st.tabs(
+    [
+        "🌐 Network Overview",
+        "📊 Store Forecast",
+        "🔀 Compare",
+        "🤖 AI Narrative",
+        "ℹ️ About",
+    ]
+)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -467,16 +489,16 @@ with tab_network:
         st.error("Cannot connect to database. Ensure `make up` is running.")
     else:
         # ── Fleet KPIs ──────────────────────────────────────────────────────
-        fleet_total      = fleet_df["total_30d"].sum()
-        fleet_avg_store  = fleet_df["total_30d"].mean()
+        fleet_total = fleet_df["total_30d"].sum()
+        fleet_avg_store = fleet_df["total_30d"].mean()
         fleet_peak_store = fleet_df.loc[fleet_df["total_30d"].idxmax(), "product_id"]
-        fleet_peak_val   = fleet_df["total_30d"].max()
+        fleet_peak_val = fleet_df["total_30d"].max()
         pct_high = (fleet_df["total_30d"] >= 60_000).mean() * 100
-        pct_low  = (fleet_df["total_30d"] <  20_000).mean() * 100
+        pct_low = (fleet_df["total_30d"] < 20_000).mean() * 100
 
         k1, k2, k3, k4, k5 = st.columns(5)
         k1.markdown(
-            f'<div class="kpi"><div class="val">{fleet_total/1e6:.2f}M</div>'
+            f'<div class="kpi"><div class="val">{fleet_total / 1e6:.2f}M</div>'
             f'<div class="lbl">Network 30-Day Units</div>'
             f'<span class="sub flat">1,115 stores combined</span></div>',
             unsafe_allow_html=True,
@@ -488,7 +510,7 @@ with tab_network:
             unsafe_allow_html=True,
         )
         k3.markdown(
-            f'<div class="kpi green"><div class="val">{fleet_peak_val/1000:.0f}K</div>'
+            f'<div class="kpi green"><div class="val">{fleet_peak_val / 1000:.0f}K</div>'
             f'<div class="lbl">Top Store 30-Day</div>'
             f'<span class="sub up">{fleet_peak_store}</span></div>',
             unsafe_allow_html=True,
@@ -512,19 +534,24 @@ with tab_network:
         col_trend, col_dow = st.columns([3, 2])
 
         with col_trend:
-            st.markdown('<div class="card"><div class="card-title">📈 Fleet-wide Daily Demand (Aug–Sep 2015)</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="card"><div class="card-title">📈 Fleet-wide Daily Demand (Aug–Sep 2015)</div>',
+                unsafe_allow_html=True,
+            )
             if not trend_df.empty:
                 fig_trend = go.Figure()
-                fig_trend.add_trace(go.Scatter(
-                    x=trend_df["forecast_date"].astype(str),
-                    y=trend_df["total_units"] / 1000,
-                    mode="lines",
-                    name="Total Units (K)",
-                    line=dict(color=C_BLUE, width=2.5),
-                    fill="tozeroy",
-                    fillcolor="rgba(37,99,235,0.08)",
-                    hovertemplate="<b>%{x}</b><br>Fleet total: %{y:.1f}K units<extra></extra>",
-                ))
+                fig_trend.add_trace(
+                    go.Scatter(
+                        x=trend_df["forecast_date"].astype(str),
+                        y=trend_df["total_units"] / 1000,
+                        mode="lines",
+                        name="Total Units (K)",
+                        line=dict(color=C_BLUE, width=2.5),
+                        fill="tozeroy",
+                        fillcolor="rgba(37,99,235,0.08)",
+                        hovertemplate="<b>%{x}</b><br>Fleet total: %{y:.1f}K units<extra></extra>",
+                    )
+                )
                 fig_trend.update_layout(
                     **_bg_fig(260),
                     xaxis=dict(showgrid=False, tickangle=-30),
@@ -532,30 +559,37 @@ with tab_network:
                     hovermode="x unified",
                 )
                 st.plotly_chart(fig_trend, use_container_width=True, config={"displayModeBar": False})
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
         with col_dow:
-            st.markdown('<div class="card"><div class="card-title">📅 Avg Daily Units by Day of Week</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="card"><div class="card-title">📅 Avg Daily Units by Day of Week</div>',
+                unsafe_allow_html=True,
+            )
             if not dow_df.empty:
                 dow_map = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}
                 dow_sorted = dow_df.copy()
                 dow_sorted["sort_key"] = dow_sorted["day_abbr"].map(dow_map)
                 dow_sorted = dow_sorted.sort_values("sort_key")
                 colors_dow = [
-                    C_GREEN if v == dow_sorted["avg_units"].max()
-                    else C_RED if v == dow_sorted["avg_units"].min()
+                    C_GREEN
+                    if v == dow_sorted["avg_units"].max()
+                    else C_RED
+                    if v == dow_sorted["avg_units"].min()
                     else C_BLUE
                     for v in dow_sorted["avg_units"]
                 ]
-                fig_dow = go.Figure(go.Bar(
-                    x=dow_sorted["day_abbr"],
-                    y=dow_sorted["avg_units"],
-                    marker_color=colors_dow,
-                    text=dow_sorted["avg_units"].apply(lambda v: f"{v:.0f}"),
-                    textposition="outside",
-                    textfont=dict(size=10),
-                    hovertemplate="%{x}<br>Avg: %{y:.1f} units/store<extra></extra>",
-                ))
+                fig_dow = go.Figure(
+                    go.Bar(
+                        x=dow_sorted["day_abbr"],
+                        y=dow_sorted["avg_units"],
+                        marker_color=colors_dow,
+                        text=dow_sorted["avg_units"].apply(lambda v: f"{v:.0f}"),
+                        textposition="outside",
+                        textfont=dict(size=10),
+                        hovertemplate="%{x}<br>Avg: %{y:.1f} units/store<extra></extra>",
+                    )
+                )
                 fig_dow.update_layout(
                     **_bg_fig(260),
                     xaxis=dict(showgrid=False),
@@ -563,56 +597,65 @@ with tab_network:
                     bargap=0.25,
                 )
                 st.plotly_chart(fig_dow, use_container_width=True, config={"displayModeBar": False})
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
         # ── Row 2: Top 15 stores + Store tier donut ──────────────────────────
         col_top, col_dist = st.columns([3, 2])
 
         with col_top:
-            st.markdown('<div class="card"><div class="card-title">🏆 Top 15 Stores — 30-Day Forecast Volume</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="card"><div class="card-title">🏆 Top 15 Stores — 30-Day Forecast Volume</div>',
+                unsafe_allow_html=True,
+            )
             top15 = fleet_df.head(15).copy()
             top15["tier"] = top15["total_30d"].apply(_tier)
             bar_colors = top15["tier"].map(TIER_COLORS).tolist()
-            fig_top = go.Figure(go.Bar(
-                x=top15["total_30d"] / 1000,
-                y=top15["product_id"],
-                orientation="h",
-                marker_color=bar_colors,
-                text=top15["total_30d"].apply(lambda v: f"{v/1000:.1f}K"),
-                textposition="outside",
-                textfont=dict(size=10),
-                hovertemplate="<b>%{y}</b><br>30-day total: %{x:.1f}K units<extra></extra>",
-            ))
+            fig_top = go.Figure(
+                go.Bar(
+                    x=top15["total_30d"] / 1000,
+                    y=top15["product_id"],
+                    orientation="h",
+                    marker_color=bar_colors,
+                    text=top15["total_30d"].apply(lambda v: f"{v / 1000:.1f}K"),
+                    textposition="outside",
+                    textfont=dict(size=10),
+                    hovertemplate="<b>%{y}</b><br>30-day total: %{x:.1f}K units<extra></extra>",
+                )
+            )
             fig_top.update_layout(
                 **_bg_fig(340),
                 xaxis=dict(showgrid=False, title="Units (thousands)"),
                 yaxis=dict(autorange="reversed", showgrid=False),
             )
             st.plotly_chart(fig_top, use_container_width=True, config={"displayModeBar": False})
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
         with col_dist:
-            st.markdown('<div class="card"><div class="card-title">🥧 Store Performance Segmentation</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="card"><div class="card-title">🥧 Store Performance Segmentation</div>',
+                unsafe_allow_html=True,
+            )
             fleet_df["tier"] = fleet_df["total_30d"].apply(_tier)
             tier_counts = (
                 fleet_df.groupby("tier")
                 .agg(stores=("product_id", "count"), avg_30d=("total_30d", "mean"))
                 .reset_index()
             )
-            fig_pie = go.Figure(go.Pie(
-                labels=tier_counts["tier"],
-                values=tier_counts["stores"],
-                hole=0.52,
-                marker_colors=[TIER_COLORS.get(t, C_BLUE) for t in tier_counts["tier"]],
-                textinfo="label+percent",
-                textfont_size=11,
-                hovertemplate="<b>%{label}</b><br>Stores: %{value}<br>Share: %{percent}<extra></extra>",
-            ))
+            fig_pie = go.Figure(
+                go.Pie(
+                    labels=tier_counts["tier"],
+                    values=tier_counts["stores"],
+                    hole=0.52,
+                    marker_colors=[TIER_COLORS.get(t, C_BLUE) for t in tier_counts["tier"]],
+                    textinfo="label+percent",
+                    textfont_size=11,
+                    hovertemplate="<b>%{label}</b><br>Stores: %{value}<br>Share: %{percent}<extra></extra>",
+                )
+            )
             fig_pie.update_layout(
                 **_bg_fig(200),
                 showlegend=False,
-                annotations=[dict(text="<b>1,115</b><br>stores", x=0.5, y=0.5,
-                                  font_size=13, showarrow=False)],
+                annotations=[dict(text="<b>1,115</b><br>stores", x=0.5, y=0.5, font_size=13, showarrow=False)],
             )
             st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
 
@@ -620,32 +663,40 @@ with tab_network:
             tier_summary["avg_30d"] = tier_summary["avg_30d"].apply(lambda v: f"{v:,.0f}")
             tier_summary.columns = ["Segment", "# Stores", "Avg 30-Day Units"]
             st.dataframe(tier_summary, hide_index=True, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
         # ── Row 3: Volume histogram + Weekly fleet bars ──────────────────────
         col_hist, col_wk = st.columns([3, 2])
 
         with col_hist:
-            st.markdown('<div class="card"><div class="card-title">📊 Store Volume Distribution (30-Day Forecast)</div>', unsafe_allow_html=True)
-            fig_hist = go.Figure(go.Histogram(
-                x=fleet_df["total_30d"] / 1000,
-                nbinsx=40,
-                marker_color=C_BLUE,
-                marker_line_color="white",
-                marker_line_width=0.5,
-                opacity=0.85,
-                hovertemplate="Range: %{x:.1f}K units<br>Stores: %{y}<extra></extra>",
-            ))
+            st.markdown(
+                '<div class="card"><div class="card-title">📊 Store Volume Distribution (30-Day Forecast)</div>',
+                unsafe_allow_html=True,
+            )
+            fig_hist = go.Figure(
+                go.Histogram(
+                    x=fleet_df["total_30d"] / 1000,
+                    nbinsx=40,
+                    marker_color=C_BLUE,
+                    marker_line_color="white",
+                    marker_line_width=0.5,
+                    opacity=0.85,
+                    hovertemplate="Range: %{x:.1f}K units<br>Stores: %{y}<extra></extra>",
+                )
+            )
             p25 = fleet_df["total_30d"].quantile(0.25) / 1000
             p50 = fleet_df["total_30d"].quantile(0.50) / 1000
             p75 = fleet_df["total_30d"].quantile(0.75) / 1000
             for val, label, col in [
-                (p25, "P25",    C_AMBER),
+                (p25, "P25", C_AMBER),
                 (p50, "Median", C_GREEN),
-                (p75, "P75",    C_RED),
+                (p75, "P75", C_RED),
             ]:
                 fig_hist.add_vline(
-                    x=val, line_dash="dash", line_color=col, line_width=1.5,
+                    x=val,
+                    line_dash="dash",
+                    line_color=col,
+                    line_width=1.5,
                     annotation_text=f"{label}: {val:.1f}K",
                     annotation_position="top right",
                     annotation_font_size=10,
@@ -657,30 +708,37 @@ with tab_network:
                 bargap=0.05,
             )
             st.plotly_chart(fig_hist, use_container_width=True, config={"displayModeBar": False})
-            st.markdown("""
+            st.markdown(
+                """
 <div class="insight">
 💡 <b>Insight:</b> The distribution is right-skewed — 50% of stores forecast below
 <b>19.9K units</b> in 30 days, while a small high-volume tier (17 stores) drives
 disproportionate network revenue above 60K units.
 </div>
-""", unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+""",
+                unsafe_allow_html=True,
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
 
         with col_wk:
-            st.markdown('<div class="card"><div class="card-title">🗓 Weekly Fleet Demand (Aggregate)</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="card"><div class="card-title">🗓 Weekly Fleet Demand (Aggregate)</div>',
+                unsafe_allow_html=True,
+            )
             if not weekly_fleet.empty:
-                fig_wk = go.Figure(go.Bar(
-                    x=weekly_fleet["week_start"].astype(str),
-                    y=weekly_fleet["total_units"] / 1e6,
-                    marker_color=[
-                        C_GREEN if i == weekly_fleet["total_units"].idxmax() else C_BLUE
-                        for i in weekly_fleet.index
-                    ],
-                    text=weekly_fleet["total_units"].apply(lambda v: f"{v/1e6:.2f}M"),
-                    textposition="outside",
-                    textfont=dict(size=10),
-                    hovertemplate="Week of %{x}<br>Total: %{y:.2f}M units<extra></extra>",
-                ))
+                fig_wk = go.Figure(
+                    go.Bar(
+                        x=weekly_fleet["week_start"].astype(str),
+                        y=weekly_fleet["total_units"] / 1e6,
+                        marker_color=[
+                            C_GREEN if i == weekly_fleet["total_units"].idxmax() else C_BLUE for i in weekly_fleet.index
+                        ],
+                        text=weekly_fleet["total_units"].apply(lambda v: f"{v / 1e6:.2f}M"),
+                        textposition="outside",
+                        textfont=dict(size=10),
+                        hovertemplate="Week of %{x}<br>Total: %{y:.2f}M units<extra></extra>",
+                    )
+                )
                 fig_wk.update_layout(
                     **_bg_fig(280),
                     xaxis=dict(showgrid=False, tickangle=-20),
@@ -688,10 +746,13 @@ disproportionate network revenue above 60K units.
                     bargap=0.3,
                 )
                 st.plotly_chart(fig_wk, use_container_width=True, config={"displayModeBar": False})
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
         # ── Row 4: Risk vs Volume scatter ────────────────────────────────────
-        st.markdown('<div class="card"><div class="card-title">🎯 Forecast Confidence: Risk vs Volume (all 1,115 stores)</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="card"><div class="card-title">🎯 Forecast Confidence: Risk vs Volume (all 1,115 stores)</div>',
+            unsafe_allow_html=True,
+        )
         scatter_df = fleet_df.copy()
         scatter_df["tier"] = scatter_df["total_30d"].apply(_tier)
         scatter_df["vol_pct"] = scatter_df["avg_ci_width"] / scatter_df["avg_daily"] * 100
@@ -704,7 +765,7 @@ disproportionate network revenue above 60K units.
             opacity=0.65,
             labels={
                 "total_30d": "30-Day Total Forecast (units)",
-                "vol_pct":   "Uncertainty % (CI width / avg)",
+                "vol_pct": "Uncertainty % (CI width / avg)",
             },
             custom_data=["product_id"],
         )
@@ -719,14 +780,17 @@ disproportionate network revenue above 60K units.
             legend=dict(orientation="h", y=1.08, x=0),
         )
         st.plotly_chart(fig_scatter, use_container_width=True, config={"displayModeBar": False})
-        st.markdown("""
+        st.markdown(
+            """
 <div class="insight">
 💡 <b>Insight:</b> High-volume stores (green) tend to have <em>lower relative uncertainty</em> —
 large established stores have more stable demand patterns. Low-volume stores show wider
 confidence intervals relative to their forecast, indicating higher operational risk.
 </div>
-""", unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+""",
+            unsafe_allow_html=True,
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -739,27 +803,25 @@ with tab_store:
     else:
         df = _df_from_api(primary_fc)
         plot_df = (
-            _weekly_agg(df) if view_mode == "Weekly"
+            _weekly_agg(df)
+            if view_mode == "Weekly"
             else df.copy().assign(forecast_date=df["forecast_date"].dt.strftime("%Y-%m-%d"))
         )
 
-        avg_daily  = df["forecast_units"].mean()
-        total_30d  = df["forecast_units"].sum()
-        peak_row   = df.loc[df["forecast_units"].idxmax()]
-        week1_avg  = df.head(7)["forecast_units"].mean()
-        week4_avg  = df.tail(7)["forecast_units"].mean()
-        trend_pct  = (week4_avg - week1_avg) / week1_avg * 100
-        ci_vol_pct = (
-            (df["ci_upper"] - df["ci_lower"]).mean() / avg_daily * 100
-            if df["ci_upper"].notna().any() else 0.0
-        )
+        avg_daily = df["forecast_units"].mean()
+        total_30d = df["forecast_units"].sum()
+        peak_row = df.loc[df["forecast_units"].idxmax()]
+        week1_avg = df.head(7)["forecast_units"].mean()
+        week4_avg = df.tail(7)["forecast_units"].mean()
+        trend_pct = (week4_avg - week1_avg) / week1_avg * 100
+        ci_vol_pct = (df["ci_upper"] - df["ci_lower"]).mean() / avg_daily * 100 if df["ci_upper"].notna().any() else 0.0
 
-        pct_rank   = _pct_rank(total_30d, fleet_df["total_30d"]) if not fleet_df.empty else 0.0
+        pct_rank = _pct_rank(total_30d, fleet_df["total_30d"]) if not fleet_df.empty else 0.0
         store_tier = _tier(total_30d)
         tier_class_map = {
-            "High (>60K)":  "tier-high",
+            "High (>60K)": "tier-high",
             "Mid (20-60K)": "tier-mid",
-            "Low (<20K)":   "tier-low",
+            "Low (<20K)": "tier-low",
         }
 
         # ── 5 KPI cards ─────────────────────────────────────────────────────
@@ -767,7 +829,7 @@ with tab_store:
         k1.markdown(
             f'<div class="kpi"><div class="val">{avg_daily:,.0f}</div>'
             f'<div class="lbl">Avg Daily Units</div>'
-            f'{_delta_html(trend_pct, "vs wk1")}</div>',
+            f"{_delta_html(trend_pct, 'vs wk1')}</div>",
             unsafe_allow_html=True,
         )
         k2.markdown(
@@ -785,7 +847,7 @@ with tab_store:
         k4.markdown(
             f'<div class="kpi purple"><div class="val">{ci_vol_pct:.0f}%</div>'
             f'<div class="lbl">Forecast Uncertainty</div>'
-            f'{_risk_html(ci_vol_pct)}</div>',
+            f"{_risk_html(ci_vol_pct)}</div>",
             unsafe_allow_html=True,
         )
         k5.markdown(
@@ -802,41 +864,54 @@ with tab_store:
         col_line, col_wbar = st.columns([3, 2])
 
         with col_line:
-            st.markdown('<div class="card"><div class="card-title">📈 30-Day Demand Forecast with 80% Confidence Interval</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="card"><div class="card-title">📈 30-Day Demand Forecast with 80% Confidence Interval</div>',
+                unsafe_allow_html=True,
+            )
             fig = go.Figure()
             if df["ci_upper"].notna().any():
                 x_ci = list(plot_df["forecast_date"]) + list(plot_df["forecast_date"])[::-1]
                 y_ci = list(plot_df["ci_upper"]) + list(plot_df["ci_lower"])[::-1]
-                fig.add_trace(go.Scatter(
-                    x=x_ci, y=y_ci,
-                    fill="toself",
-                    fillcolor=PALETTE_FILL[0],
-                    line=dict(color="rgba(0,0,0,0)"),
+                fig.add_trace(
+                    go.Scatter(
+                        x=x_ci,
+                        y=y_ci,
+                        fill="toself",
+                        fillcolor=PALETTE_FILL[0],
+                        line=dict(color="rgba(0,0,0,0)"),
+                        hoverinfo="skip",
+                        name="80% CI",
+                    )
+                )
+            fig.add_trace(
+                go.Scatter(
+                    x=plot_df["forecast_date"],
+                    y=plot_df["forecast_units"],
+                    mode="lines+markers",
+                    line=dict(color=C_BLUE, width=2.5),
+                    marker=dict(size=5),
+                    name=primary_store,
+                    hovertemplate="<b>%{x}</b><br>Units: %{y:,.0f}<extra></extra>",
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=[peak_row["forecast_date"].strftime("%Y-%m-%d")],
+                    y=[peak_row["forecast_units"]],
+                    mode="markers+text",
+                    marker=dict(color=C_GREEN, size=12, symbol="star"),
+                    text=["Peak"],
+                    textposition="top center",
+                    textfont=dict(size=10, color=C_GREEN),
+                    name="Peak",
                     hoverinfo="skip",
-                    name="80% CI",
-                ))
-            fig.add_trace(go.Scatter(
-                x=plot_df["forecast_date"],
-                y=plot_df["forecast_units"],
-                mode="lines+markers",
-                line=dict(color=C_BLUE, width=2.5),
-                marker=dict(size=5),
-                name=primary_store,
-                hovertemplate="<b>%{x}</b><br>Units: %{y:,.0f}<extra></extra>",
-            ))
-            fig.add_trace(go.Scatter(
-                x=[peak_row["forecast_date"].strftime("%Y-%m-%d")],
-                y=[peak_row["forecast_units"]],
-                mode="markers+text",
-                marker=dict(color=C_GREEN, size=12, symbol="star"),
-                text=["Peak"],
-                textposition="top center",
-                textfont=dict(size=10, color=C_GREEN),
-                name="Peak",
-                hoverinfo="skip",
-            ))
+                )
+            )
             fig.add_hline(
-                y=avg_daily, line_dash="dot", line_color=C_AMBER, line_width=1.5,
+                y=avg_daily,
+                line_dash="dot",
+                line_color=C_AMBER,
+                line_width=1.5,
                 annotation_text=f"Avg {avg_daily:,.0f}",
                 annotation_position="right",
                 annotation_font_size=10,
@@ -849,24 +924,25 @@ with tab_store:
                 yaxis=dict(gridcolor="#F1F5F9", title="Units"),
             )
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
         with col_wbar:
-            st.markdown('<div class="card"><div class="card-title">🗓 Weekly Demand Totals</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="card"><div class="card-title">🗓 Weekly Demand Totals</div>', unsafe_allow_html=True
+            )
             wk = _weekly_agg(df)
-            fig_wk = go.Figure(go.Bar(
-                x=wk["forecast_date"],
-                y=wk["forecast_units"],
-                marker_color=[
-                    C_GREEN if v == wk["forecast_units"].max() else C_BLUE
-                    for v in wk["forecast_units"]
-                ],
-                marker_line_width=0,
-                text=wk["forecast_units"].apply(lambda v: f"{v:,.0f}"),
-                textposition="outside",
-                textfont=dict(size=10),
-                hovertemplate="Week of %{x}<br>Total: %{y:,.0f} units<extra></extra>",
-            ))
+            fig_wk = go.Figure(
+                go.Bar(
+                    x=wk["forecast_date"],
+                    y=wk["forecast_units"],
+                    marker_color=[C_GREEN if v == wk["forecast_units"].max() else C_BLUE for v in wk["forecast_units"]],
+                    marker_line_width=0,
+                    text=wk["forecast_units"].apply(lambda v: f"{v:,.0f}"),
+                    textposition="outside",
+                    textfont=dict(size=10),
+                    hovertemplate="Week of %{x}<br>Total: %{y:,.0f} units<extra></extra>",
+                )
+            )
             fig_wk.update_layout(
                 **_bg_fig(320),
                 xaxis=dict(showgrid=False, tickangle=-20),
@@ -874,13 +950,16 @@ with tab_store:
                 bargap=0.35,
             )
             st.plotly_chart(fig_wk, use_container_width=True, config={"displayModeBar": False})
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
         # ── Row 2: DOW pattern + Benchmark/WoW ──────────────────────────────
         col_sdow, col_bench = st.columns([2, 3])
 
         with col_sdow:
-            st.markdown('<div class="card"><div class="card-title">📅 Demand by Day of Week (this store)</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="card"><div class="card-title">📅 Demand by Day of Week (this store)</div>',
+                unsafe_allow_html=True,
+            )
             store_dow = df.copy()
             store_dow["dow"] = store_dow["forecast_date"].dt.day_name().str[:3]
             dow_order_map = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}
@@ -892,21 +971,25 @@ with tab_store:
                 .sort_values("sort_k")
             )
             sdow_colors = [
-                C_GREEN if v == store_dow_agg["forecast_units"].max()
-                else C_RED if v == store_dow_agg["forecast_units"].min()
+                C_GREEN
+                if v == store_dow_agg["forecast_units"].max()
+                else C_RED
+                if v == store_dow_agg["forecast_units"].min()
                 else C_BLUE
                 for v in store_dow_agg["forecast_units"]
             ]
-            fig_sdow = go.Figure(go.Bar(
-                x=store_dow_agg["dow"],
-                y=store_dow_agg["forecast_units"],
-                marker_color=sdow_colors,
-                marker_line_width=0,
-                text=store_dow_agg["forecast_units"].apply(lambda v: f"{v:.0f}"),
-                textposition="outside",
-                textfont=dict(size=10),
-                hovertemplate="%{x}<br>Avg: %{y:.1f} units<extra></extra>",
-            ))
+            fig_sdow = go.Figure(
+                go.Bar(
+                    x=store_dow_agg["dow"],
+                    y=store_dow_agg["forecast_units"],
+                    marker_color=sdow_colors,
+                    marker_line_width=0,
+                    text=store_dow_agg["forecast_units"].apply(lambda v: f"{v:.0f}"),
+                    textposition="outside",
+                    textfont=dict(size=10),
+                    hovertemplate="%{x}<br>Avg: %{y:.1f} units<extra></extra>",
+                )
+            )
             fig_sdow.update_layout(
                 **_bg_fig(280),
                 xaxis=dict(showgrid=False),
@@ -914,10 +997,13 @@ with tab_store:
                 yaxis=dict(gridcolor="#F1F5F9", title="Avg units"),
             )
             st.plotly_chart(fig_sdow, use_container_width=True, config={"displayModeBar": False})
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
         with col_bench:
-            st.markdown('<div class="card"><div class="card-title">📍 Network Benchmark + Week-over-Week Trend</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="card"><div class="card-title">📍 Network Benchmark + Week-over-Week Trend</div>',
+                unsafe_allow_html=True,
+            )
             if not fleet_df.empty:
                 p25v = fleet_df["total_30d"].quantile(0.25)
                 p50v = fleet_df["total_30d"].quantile(0.50)
@@ -927,24 +1013,37 @@ with tab_store:
                 # Bullet chart
                 fig_bullet = go.Figure()
                 for end, zone_col in [
-                    (p25v, "#FEF9C3"), (p50v, "#DBEAFE"),
-                    (p75v, "#DCFCE7"), (p90v, "#BBF7D0"),
+                    (p25v, "#FEF9C3"),
+                    (p50v, "#DBEAFE"),
+                    (p75v, "#DCFCE7"),
+                    (p90v, "#BBF7D0"),
                 ]:
                     fig_bullet.add_shape(
-                        type="rect", x0=0, x1=end / 1000, y0=-0.4, y1=0.4,
-                        fillcolor=zone_col, line_width=0,
+                        type="rect",
+                        x0=0,
+                        x1=end / 1000,
+                        y0=-0.4,
+                        y1=0.4,
+                        fillcolor=zone_col,
+                        line_width=0,
                     )
-                fig_bullet.add_trace(go.Bar(
-                    x=[total_30d / 1000], y=[""],
-                    orientation="h",
-                    marker_color=TIER_COLORS[store_tier],
-                    width=0.35,
-                    hovertemplate=f"{primary_store}: {total_30d:,.0f} units — {pct_rank:.0f}th pctile<extra></extra>",
-                ))
+                fig_bullet.add_trace(
+                    go.Bar(
+                        x=[total_30d / 1000],
+                        y=[""],
+                        orientation="h",
+                        marker_color=TIER_COLORS[store_tier],
+                        width=0.35,
+                        hovertemplate=f"{primary_store}: {total_30d:,.0f} units — {pct_rank:.0f}th pctile<extra></extra>",
+                    )
+                )
                 for val, bl_label in [(p50v, "Median"), (p75v, "P75")]:
                     fig_bullet.add_vline(
-                        x=val / 1000, line_dash="dash", line_color="#475569", line_width=1.5,
-                        annotation_text=f"{bl_label}: {val/1000:.1f}K",
+                        x=val / 1000,
+                        line_dash="dash",
+                        line_color="#475569",
+                        line_width=1.5,
+                        annotation_text=f"{bl_label}: {val / 1000:.1f}K",
                         annotation_font_size=9,
                         annotation_position="top",
                     )
@@ -957,25 +1056,33 @@ with tab_store:
                 st.plotly_chart(fig_bullet, use_container_width=True, config={"displayModeBar": False})
 
                 # Week-over-week bars
-                st.markdown('<div class="card-title" style="margin-top:.8rem">📆 Week-over-Week Volume Trend</div>', unsafe_allow_html=True)
-                n_weeks  = min(4, len(df) // 7 + 1)
-                wk_vals  = [df.iloc[i * 7:(i + 1) * 7]["forecast_units"].sum()
-                            for i in range(n_weeks) if len(df.iloc[i * 7:(i + 1) * 7]) > 0]
+                st.markdown(
+                    '<div class="card-title" style="margin-top:.8rem">📆 Week-over-Week Volume Trend</div>',
+                    unsafe_allow_html=True,
+                )
+                n_weeks = min(4, len(df) // 7 + 1)
+                wk_vals = [
+                    df.iloc[i * 7 : (i + 1) * 7]["forecast_units"].sum()
+                    for i in range(n_weeks)
+                    if len(df.iloc[i * 7 : (i + 1) * 7]) > 0
+                ]
                 wk_labels = [f"Week {i + 1}" for i in range(len(wk_vals))]
                 wow_colors = [
-                    C_BLUE if i == 0
-                    else (C_GREEN if wk_vals[i] >= wk_vals[i - 1] else C_RED)
+                    C_BLUE if i == 0 else (C_GREEN if wk_vals[i] >= wk_vals[i - 1] else C_RED)
                     for i in range(len(wk_vals))
                 ]
-                fig_wow = go.Figure(go.Bar(
-                    x=wk_labels, y=wk_vals,
-                    marker_color=wow_colors,
-                    marker_line_width=0,
-                    text=[f"{v:,.0f}" for v in wk_vals],
-                    textposition="outside",
-                    textfont=dict(size=11),
-                    hovertemplate="%{x}<br>Total: %{y:,.0f} units<extra></extra>",
-                ))
+                fig_wow = go.Figure(
+                    go.Bar(
+                        x=wk_labels,
+                        y=wk_vals,
+                        marker_color=wow_colors,
+                        marker_line_width=0,
+                        text=[f"{v:,.0f}" for v in wk_vals],
+                        textposition="outside",
+                        textfont=dict(size=11),
+                        hovertemplate="%{x}<br>Total: %{y:,.0f} units<extra></extra>",
+                    )
+                )
                 fig_wow.update_layout(
                     **_bg_fig(180),
                     xaxis=dict(showgrid=False),
@@ -983,7 +1090,7 @@ with tab_store:
                     bargap=0.4,
                 )
                 st.plotly_chart(fig_wow, use_container_width=True, config={"displayModeBar": False})
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
         # ── CSV export ───────────────────────────────────────────────────────
         with st.expander("📋 Raw forecast data + export", expanded=False):
@@ -993,11 +1100,11 @@ with tab_store:
             st.dataframe(
                 exp_df,
                 column_config={
-                    "forecast_date":  st.column_config.TextColumn("Date"),
+                    "forecast_date": st.column_config.TextColumn("Date"),
                     "forecast_units": st.column_config.NumberColumn("Units", format="%.0f"),
-                    "ci_lower":       st.column_config.NumberColumn("CI Lower", format="%.0f"),
-                    "ci_upper":       st.column_config.NumberColumn("CI Upper", format="%.0f"),
-                    "dow":            st.column_config.TextColumn("Day"),
+                    "ci_lower": st.column_config.NumberColumn("CI Lower", format="%.0f"),
+                    "ci_upper": st.column_config.NumberColumn("CI Upper", format="%.0f"),
+                    "dow": st.column_config.TextColumn("Day"),
                 },
                 hide_index=True,
                 use_container_width=True,
@@ -1030,27 +1137,35 @@ with tab_compare:
             col_c, fill_c = next(clr_cycle)
             sdf = _df_from_api(store_api[sid])
             pdf = (
-                _weekly_agg(sdf) if view_mode == "Weekly"
+                _weekly_agg(sdf)
+                if view_mode == "Weekly"
                 else sdf.copy().assign(forecast_date=sdf["forecast_date"].dt.strftime("%Y-%m-%d"))
             )
             if sdf["ci_upper"].notna().any():
                 x_ci = list(pdf["forecast_date"]) + list(pdf["forecast_date"])[::-1]
                 y_ci = list(pdf["ci_upper"]) + list(pdf["ci_lower"])[::-1]
-                fig_cmp.add_trace(go.Scatter(
-                    x=x_ci, y=y_ci,
-                    fill="toself", fillcolor=fill_c,
-                    line=dict(color="rgba(0,0,0,0)"),
-                    hoverinfo="skip", showlegend=False,
-                ))
-            fig_cmp.add_trace(go.Scatter(
-                x=pdf["forecast_date"],
-                y=pdf["forecast_units"],
-                mode="lines+markers",
-                line=dict(color=col_c, width=2.5),
-                marker=dict(size=5),
-                name=sid,
-                hovertemplate=f"<b>{sid}</b><br>%{{x}}<br>Units: %{{y:,.0f}}<extra></extra>",
-            ))
+                fig_cmp.add_trace(
+                    go.Scatter(
+                        x=x_ci,
+                        y=y_ci,
+                        fill="toself",
+                        fillcolor=fill_c,
+                        line=dict(color="rgba(0,0,0,0)"),
+                        hoverinfo="skip",
+                        showlegend=False,
+                    )
+                )
+            fig_cmp.add_trace(
+                go.Scatter(
+                    x=pdf["forecast_date"],
+                    y=pdf["forecast_units"],
+                    mode="lines+markers",
+                    line=dict(color=col_c, width=2.5),
+                    marker=dict(size=5),
+                    name=sid,
+                    hovertemplate=f"<b>{sid}</b><br>%{{x}}<br>Units: %{{y:,.0f}}<extra></extra>",
+                )
+            )
 
         fig_cmp.update_layout(
             **_bg_fig(380),
@@ -1066,21 +1181,23 @@ with tab_compare:
         for sid in all_selected:
             if sid not in store_api:
                 continue
-            sdf  = _df_from_api(store_api[sid])
-            w1   = sdf.head(7)["forecast_units"].mean()
-            w4   = sdf.tail(7)["forecast_units"].mean()
+            sdf = _df_from_api(store_api[sid])
+            w1 = sdf.head(7)["forecast_units"].mean()
+            w4 = sdf.tail(7)["forecast_units"].mean()
             ci_w = (sdf["ci_upper"] - sdf["ci_lower"]).mean() if sdf["ci_upper"].notna().any() else 0
-            pr   = _pct_rank(sdf["forecast_units"].sum(), fleet_df["total_30d"]) if not fleet_df.empty else 0
-            rows.append({
-                "Store":        sid,
-                "Tier":         _tier(sdf["forecast_units"].sum()),
-                "Avg Daily":    f"{sdf['forecast_units'].mean():,.0f}",
-                "30-Day Total": f"{sdf['forecast_units'].sum():,.0f}",
-                "Peak Units":   f"{sdf['forecast_units'].max():,.0f}",
-                "Wk1→Wk4":     f"{(w4 - w1) / w1 * 100:+.1f}%",
-                "Uncertainty":  f"{ci_w / sdf['forecast_units'].mean() * 100:.0f}%",
-                "Pctile":       f"{pr:.0f}th",
-            })
+            pr = _pct_rank(sdf["forecast_units"].sum(), fleet_df["total_30d"]) if not fleet_df.empty else 0
+            rows.append(
+                {
+                    "Store": sid,
+                    "Tier": _tier(sdf["forecast_units"].sum()),
+                    "Avg Daily": f"{sdf['forecast_units'].mean():,.0f}",
+                    "30-Day Total": f"{sdf['forecast_units'].sum():,.0f}",
+                    "Peak Units": f"{sdf['forecast_units'].max():,.0f}",
+                    "Wk1→Wk4": f"{(w4 - w1) / w1 * 100:+.1f}%",
+                    "Uncertainty": f"{ci_w / sdf['forecast_units'].mean() * 100:.0f}%",
+                    "Pctile": f"{pr:.0f}th",
+                }
+            )
         st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
 
 
@@ -1092,9 +1209,7 @@ with tab_narrative:
     hdr_col, ref_col = st.columns([4, 1])
     with hdr_col:
         st.markdown("### 🤖 AI Executive Summary")
-        st.caption(
-            f"**{primary_store}** · LLaMA 3.3·70B (Groq) + FAISS RAG on Rossmann business documents"
-        )
+        st.caption(f"**{primary_store}** · LLaMA 3.3·70B (Groq) + FAISS RAG on Rossmann business documents")
     with ref_col:
         if st.button("🔄 Refresh", use_container_width=True):
             fetch_narrative.clear()
@@ -1112,10 +1227,7 @@ with tab_narrative:
             except ValueError:
                 st.caption(f"Generated {gen_at}")
     else:
-        st.info(
-            f"No narrative for **{primary_store}** yet. "
-            "Click below or run `make sync-narratives`."
-        )
+        st.info(f"No narrative for **{primary_store}** yet. Click below or run `make sync-narratives`.")
 
     st.markdown("---")
     st.markdown("#### ⚡ Generate live")
@@ -1129,10 +1241,12 @@ with tab_narrative:
                 try:
                     import sys
                     from pathlib import Path
+
                     sys.path.insert(0, str(Path(__file__).resolve().parent))
                     from rag.narrative_chain import NarrativeChain  # type: ignore[import]
+
                     chain = NarrativeChain()
-                    text  = chain.generate(primary_store, fc_data["forecasts"])
+                    text = chain.generate(primary_store, fc_data["forecasts"])
                     st.markdown(f'<div class="narrative-box">{text}</div>', unsafe_allow_html=True)
                     st.success("Done! Run `make sync-narratives` to persist.")
                 except Exception as exc:
@@ -1147,7 +1261,8 @@ with tab_about:
     c1, c2 = st.columns([3, 2])
     with c1:
         st.markdown("#### System Architecture")
-        st.code("""
+        st.code(
+            """
 Rossmann Sales CSV (844K rows, 1115 stores)
         │
         ▼
@@ -1179,7 +1294,9 @@ narratives           HuggingFace
                   FastAPI backend (:8080)
                           │
                   Streamlit BI dashboard (:8501)
-        """, language="text")
+        """,
+            language="text",
+        )
 
     with c2:
         st.markdown("#### Technology Stack")
@@ -1210,9 +1327,12 @@ narratives           HuggingFace
 
     st.markdown("---")
     st.markdown("#### Quick-start")
-    st.code("""make up              # PostgreSQL
+    st.code(
+        """make up              # PostgreSQL
 make build-index     # FAISS RAG index
 make run             # FastAPI :8080
 make sync-forecasts  # BQ → Postgres
 make sync-narratives # AI narratives
-make ui              # Streamlit :8501""", language="bash")
+make ui              # Streamlit :8501""",
+        language="bash",
+    )
