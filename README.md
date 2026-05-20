@@ -13,10 +13,11 @@
 3. [Architecture](#architecture)
 4. [Component Breakdown](#component-breakdown)
    - [1. ETL Pipeline (Apache Beam)](#1-etl-pipeline-apache-beam)
-   - [2. BigQuery ML Forecasting](#2-bigquery-ml-forecasting)
-   - [3. FastAPI Backend](#3-fastapi-backend)
-   - [4. Streamlit BI Dashboard](#4-streamlit-bi-dashboard)
-   - [5. PostgreSQL Data Store](#5-postgresql-data-store)
+   - [2. Feature Engineering (PySpark)](#2-feature-engineering-pyspark)
+   - [3. BigQuery ML Forecasting](#3-bigquery-ml-forecasting)
+   - [4. FastAPI Backend](#4-fastapi-backend)
+   - [5. Streamlit BI Dashboard](#5-streamlit-bi-dashboard)
+   - [6. PostgreSQL Data Store](#6-postgresql-data-store)
 5. [Tech Stack](#tech-stack)
 6. [Project Structure](#project-structure)
 7. [Data Flow](#data-flow)
@@ -162,7 +163,52 @@ make etl-gcp      # DataflowRunner — production, auto-scales
 
 ---
 
-### 2. BigQuery ML Forecasting
+### 2. Feature Engineering (PySpark)
+
+**File:** `spark/feature_engineering.py`, `spark/spark_eda.ipynb`
+
+A scalable feature engineering layer that transforms raw sales data into machine-learning-ready feature tables. This runs *after* Beam ingestion but *before* BigQuery ML training.
+
+**Key transformations:**
+- **Rolling aggregations**: 7-day and 30-day rolling averages of units sold, rolling revenue sums, and rolling standard deviations (demand volatility)
+- **Lag features**: 1-day, 7-day, 14-day, and 30-day historical lags for time-series forecasting signals
+- **Calendar signals**: day-of-week, week-of-year, month, and weekend flags to capture seasonal demand patterns
+- **Competitive context**: store revenue rank by day (what % of stores are outperforming each store on a given day)
+
+**Output schema:**
+```
+date, store_id, units_sold, revenue,
+rolling_avg_units_7d, rolling_avg_units_30d, rolling_revenue_7d, rolling_stddev_7d,
+lag_1d_units, lag_7d_units, lag_14d_units, lag_30d_units,
+day_of_week, week_of_year, month, is_weekend, store_revenue_rank
+```
+
+**Running the job:**
+```bash
+make spark-features          # Local mode (dev)
+make spark-features-gcp      # Dataproc cluster (production)
+
+# Or manually:
+python spark/feature_engineering.py \
+  --input gs://$GCS_BUCKET/sales/raw/*.parquet \
+
+
+### 4
+**Spark configuration:**
+- Adaptive Query Execution enabled (`spark.sql.adaptive.enabled=true`)
+- Dynamic partition coalescing for output efficiency
+- Local mode for dev (`local[*]`), Dataproc for production
+
+**EDA notebook** (`spark/spark_eda.ipynb`):
+- Loads raw sales data and applies all feature engineering transforms
+- Computes `.describe()` statistics across the full dataset
+- Distribution analysis via `groupBy().agg()` with percentile approximations
+- Correlation matrix using `pyspark.ml.stat.Correlation` to validate feature multicollinearity
+- Null validation and partition statistics before writing to GCS
+
+---
+
+### 3. BigQuery ML Forecasting
 
 **Files:** `bq/sql/`
 
@@ -219,6 +265,7 @@ GET  /redoc                     → ReDoc (dev only)
 
 ---
 
+
 ### 4. Streamlit BI Dashboard
 
 **File:** `streamlit_app.py`
@@ -230,7 +277,7 @@ A 1,200-line professional BI dashboard built with Streamlit + Plotly. Uses **dir
 - `_pg_dsn()` strips SQLAlchemy DSN prefixes for psycopg2 compatibility
 - Graceful degradation — all charts show `st.warning` if DB is unreachable
 
----
+
 
 ### 5. PostgreSQL Data Store
 
