@@ -94,6 +94,18 @@ class Settings(BaseSettings):
         return f"{self.google_cloud_project}:{self.bq_dataset}.sales_clean"
 
     @property
+    def gcs_spark_input_path(self) -> str:
+        return f"gs://{self.gcs_bucket}/sales/*.csv"
+
+    @property
+    def gcs_spark_output_path(self) -> str:
+        return f"gs://{self.gcs_bucket}/sales/features/"
+
+    @property
+    def bq_features_table(self) -> str:
+        return f"{self.google_cloud_project}.{self.bq_dataset}.sales_features"
+
+    @property
     def bq_forecast_table(self) -> str:
         return f"{self.google_cloud_project}.{self.bq_dataset}.forecasts_30d"
 

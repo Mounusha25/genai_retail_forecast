@@ -1,7 +1,8 @@
 """
 PySpark feature engineering for retail demand forecasting.
 
-This module reads raw sales data from GCS and engineers time-series features:
+This module reads raw sales data (CSV from Beam ingestion, or parquet) and engineers
+time-series features:
 - Rolling window aggregations (7-day, 30-day)
 - Lag features (1d, 7d, 14d, 30d)
 - Calendar signals (day_of_week, week_of_year, month, is_weekend)
@@ -10,12 +11,17 @@ This module reads raw sales data from GCS and engineers time-series features:
 Output is written back to GCS as parquet for BigQuery ML ingestion.
 """
 
+from __future__ import annotations
+
 import argparse
+import logging
 import sys
 
-from pyspark.sql import SparkSession
+from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
+
+logger = logging.getLogger(__name__)
 
 
 def build_spark_session(app_name: str = "RetailFeatureEngineering") -> SparkSession:
@@ -36,12 +42,19 @@ def build_spark_session(app_name: str = "RetailFeatureEngineering") -> SparkSess
     )
 
 
+def _read_input(spark: SparkSession, input_path: str, input_format: str) -> DataFrame:
+    if input_format == "csv":
+        return spark.read.csv(input_path, header=True, inferSchema=True)
+    return spark.read.parquet(input_path)
+
+
 def engineer_features(
     spark: SparkSession,
     input_path: str,
     output_path: str,
+    input_format: str = "parquet",
     sample_fraction: float | None = None,
-) -> None:
+) -> DataFrame:
     """
     Read raw sales data, engineer time-series features, and write enriched output.
 
@@ -57,31 +70,34 @@ def engineer_features(
 
     Args:
         spark: Active SparkSession.
-        input_path: GCS path to raw sales parquet/CSV.
-        output_path: GCS path for engineered features output.
+        input_path: GCS or local path to raw sales data.
+        output_path: GCS or local path for engineered features output.
+        input_format: ``"csv"`` (Beam ETL output) or ``"parquet"``.
         sample_fraction: Optional sample fraction for testing (0.0 to 1.0).
 
-    Raises:
-        FileNotFoundError: If input path does not exist.
+    Returns:
+        The engineered, null-filtered DataFrame that was written to *output_path*.
     """
-    # Read raw data
-    df = spark.read.parquet(input_path)
+    df = _read_input(spark, input_path, input_format)
 
-    # Optional sampling for testing
     if sample_fraction is not None:
         df = df.sample(fraction=sample_fraction, seed=42)
-        spark.logger.info(f"Sampled DataFrame to {sample_fraction * 100:.1f}%")
+        logger.info("Sampled DataFrame to %.1f%%", sample_fraction * 100)
 
-    spark.logger.info(f"Input records: {df.count():,}")
+    logger.info("Input records: %s", f"{df.count():,}")
 
     # ────────────────────────────────────────────────────────────────
     # 1. Rolling window aggregations
     # ────────────────────────────────────────────────────────────────
     window_7d = (
-        Window.partitionBy("product_id", "store_id").orderBy("date").rangeBetween(-6 * 86400, 0)  # 6 days in seconds
+        Window.partitionBy("product_id", "store_id")
+        .orderBy(F.col("date").cast("timestamp").cast("long"))
+        .rangeBetween(-6 * 86400, 0)  # 6 days in seconds
     )
     window_30d = (
-        Window.partitionBy("product_id", "store_id").orderBy("date").rangeBetween(-29 * 86400, 0)  # 29 days in seconds
+        Window.partitionBy("product_id", "store_id")
+        .orderBy(F.col("date").cast("timestamp").cast("long"))
+        .rangeBetween(-29 * 86400, 0)  # 29 days in seconds
     )
 
     df = df.withColumn("rolling_avg_units_7d", F.avg("units_sold").over(window_7d))
@@ -89,17 +105,17 @@ def engineer_features(
     df = df.withColumn("rolling_revenue_7d", F.sum("revenue").over(window_7d))
     df = df.withColumn("rolling_stddev_7d", F.stddev("units_sold").over(window_7d))
 
-    spark.logger.info("✓ Rolling window aggregations computed")
+    logger.info("Rolling window aggregations computed")
 
     # ────────────────────────────────────────────────────────────────
     # 2. Lag features for time-series modeling
     # ────────────────────────────────────────────────────────────────
     lag_window = Window.partitionBy("product_id", "store_id").orderBy("date")
-    for lag_days in [1, 7, 14, 30]:
+    for lag_days in (1, 7, 14, 30):
         col_name = f"lag_{lag_days}d_units"
         df = df.withColumn(col_name, F.lag("units_sold", lag_days).over(lag_window))
 
-    spark.logger.info("✓ Lag features computed")
+    logger.info("Lag features computed")
 
     # ────────────────────────────────────────────────────────────────
     # 3. Calendar features
@@ -108,10 +124,10 @@ def engineer_features(
         df.withColumn("day_of_week", F.dayofweek("date"))
         .withColumn("week_of_year", F.weekofyear("date"))
         .withColumn("month", F.month("date"))
-        .withColumn("is_weekend", (F.dayofweek("date").isin(1, 7)).cast("int"))
+        .withColumn("is_weekend", F.dayofweek("date").isin(1, 7).cast("int"))
     )
 
-    spark.logger.info("✓ Calendar features computed")
+    logger.info("Calendar features computed")
 
     # ────────────────────────────────────────────────────────────────
     # 4. Store-level revenue rank (competitive context)
@@ -119,35 +135,42 @@ def engineer_features(
     store_window = Window.partitionBy("date").orderBy(F.desc("revenue"))
     df = df.withColumn("store_revenue_rank", F.rank().over(store_window))
 
-    spark.logger.info("✓ Store revenue rank computed")
+    logger.info("Store revenue rank computed")
 
     # ────────────────────────────────────────────────────────────────
     # 5. Drop rows with null lags (cold-start period) and write output
     # ────────────────────────────────────────────────────────────────
     df_clean = df.dropna(subset=["lag_1d_units", "lag_7d_units"])
 
-    spark.logger.info(f"Records after lag nulls removal: {df_clean.count():,}")
-    spark.logger.info(f"Partitions: {df_clean.rdd.getNumPartitions()}")
+    logger.info("Records after lag-null removal: %s", f"{df_clean.count():,}")
+    logger.info("Output partitions: %d", df_clean.rdd.getNumPartitions())
 
-    # Write output
     df_clean.write.mode("overwrite").parquet(output_path)
 
-    spark.logger.info("✓ Feature engineering complete")
-    spark.logger.info(f"✓ Output written to: {output_path}")
+    logger.info("Feature engineering complete — output written to %s", output_path)
+    return df_clean
 
 
 def main() -> None:
     """Entry point for PySpark feature engineering job."""
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
     parser = argparse.ArgumentParser(description="Engineer time-series features for retail forecasting")
     parser.add_argument(
         "--input",
         required=True,
-        help="GCS or local path to raw sales parquet (e.g., gs://bucket/sales/raw/*.parquet)",
+        help="GCS or local path to raw sales data (e.g., gs://bucket/sales/raw/*.csv)",
     )
     parser.add_argument(
         "--output",
         required=True,
         help="GCS or local path for engineered features output (e.g., gs://bucket/sales/features/)",
+    )
+    parser.add_argument(
+        "--input-format",
+        choices=("csv", "parquet"),
+        default="parquet",
+        help="Format of --input. Use 'csv' for raw Beam ETL output (default: parquet).",
     )
     parser.add_argument(
         "--sample",
@@ -158,14 +181,21 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    spark = build_spark_session()
     try:
-        spark = build_spark_session()
-        engineer_features(spark, args.input, args.output, args.sample)
+        engineer_features(
+            spark,
+            args.input,
+            args.output,
+            input_format=args.input_format,
+            sample_fraction=args.sample,
+        )
+    except Exception:
+        logger.exception("Feature engineering failed")
         spark.stop()
-        sys.exit(0)
-    except Exception as e:
-        spark.logger.error(f"Feature engineering failed: {e}", exc_info=True)
         sys.exit(1)
+
+    spark.stop()
 
 
 if __name__ == "__main__":

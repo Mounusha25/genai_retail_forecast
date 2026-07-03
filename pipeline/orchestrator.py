@@ -13,12 +13,13 @@ class Orchestrator:
     """
     Coordinates the full forecasting pipeline end-to-end:
 
-    1. Beam ETL   — reads raw CSVs from GCS, writes clean rows to BigQuery.
-    2. BQ view    — refreshes the aggregated daily-sales view.
-    3. BQ train   — retrains the ARIMA_PLUS model.
-    4. BQ forecast — materialises the 30-day forecast table.
-    5. DB ingest  — syncs BQ forecast rows to PostgreSQL.
-    6. Narratives — generates GPT-4 summaries per product and writes to PostgreSQL.
+    1. Beam ETL    — reads raw CSVs from GCS, writes clean rows to BigQuery.
+    2. Spark features — engineers rolling/lag/calendar features, loads into `sales_features`.
+    3. BQ view     — refreshes the aggregated daily-sales view (sourced from sales_features).
+    4. BQ train    — retrains the ARIMA_PLUS model.
+    5. BQ forecast — materialises the 30-day forecast table.
+    6. DB ingest   — syncs BQ forecast rows to PostgreSQL.
+    7. Narratives  — generates GPT-4 summaries per product and writes to PostgreSQL.
     """
 
     def __init__(self) -> None:
@@ -31,6 +32,7 @@ class Orchestrator:
         logger.info("Pipeline started at %s", start.isoformat())
 
         await self._run_etl()
+        await asyncio.to_thread(self._run_spark_features)
         await asyncio.to_thread(self._run_bq)
         await self._sync_forecasts_to_postgres()
         await self._generate_narratives()
@@ -41,7 +43,7 @@ class Orchestrator:
     # ── Step 1: Beam ETL ───────────────────────────────────────
 
     async def _run_etl(self) -> None:
-        logger.info("Step 1/4 — Beam ETL")
+        logger.info("Step 1/5 — Beam ETL")
         from etl.beam_pipeline import run as beam_run  # noqa: PLC0415
 
         await asyncio.to_thread(
@@ -49,10 +51,32 @@ class Orchestrator:
             runner="DataflowRunner" if self._cfg.is_production else "DirectRunner",
         )
 
-    # ── Step 2: BigQuery (view + train + forecast) ─────────────
+    # ── Step 2: PySpark feature engineering ─────────────────────
+
+    def _run_spark_features(self) -> None:
+        logger.info("Step 2/5 — PySpark feature engineering")
+        from bq.client import BigQueryClient  # noqa: PLC0415
+        from spark.feature_engineering import build_spark_session, engineer_features  # noqa: PLC0415
+
+        cfg = self._cfg
+        spark = build_spark_session()
+        try:
+            engineer_features(
+                spark,
+                input_path=cfg.gcs_spark_input_path,
+                output_path=cfg.gcs_spark_output_path,
+                input_format="csv",
+            )
+        finally:
+            spark.stop()
+
+        bq = BigQueryClient()
+        bq.load_features_table(f"{cfg.gcs_spark_output_path}*.parquet")
+
+    # ── Step 3: BigQuery (view + train + forecast) ─────────────
 
     def _run_bq(self) -> None:
-        logger.info("Step 2/4 — BigQuery ML (view → train → forecast)")
+        logger.info("Step 3/5 — BigQuery ML (view → train → forecast)")
         from bq.client import BigQueryClient  # noqa: PLC0415
 
         bq = BigQueryClient()
@@ -69,10 +93,10 @@ class Orchestrator:
                 row.get("rmse", 0),
             )
 
-    # ── Step 3: Sync BQ forecasts → PostgreSQL ─────────────────
+    # ── Step 4: Sync BQ forecasts → PostgreSQL ─────────────────
 
     async def _sync_forecasts_to_postgres(self) -> None:
-        logger.info("Step 3/4 — Syncing BQ forecasts to PostgreSQL")
+        logger.info("Step 4/5 — Syncing BQ forecasts to PostgreSQL")
         from sqlalchemy import delete  # noqa: PLC0415
 
         from bq.client import BigQueryClient  # noqa: PLC0415
@@ -122,10 +146,10 @@ class Orchestrator:
         sql = f"SELECT DISTINCT product_id FROM `{cfg.bq_forecast_table}` ORDER BY 1"
         return [row["product_id"] for row in client.query(sql).result()]
 
-    # ── Step 4: Generate RAG narratives ────────────────────────
+    # ── Step 5: Generate RAG narratives ────────────────────────
 
     async def _generate_narratives(self) -> None:
-        logger.info("Step 4/4 — Generating RAG narratives")
+        logger.info("Step 5/5 — Generating RAG narratives")
         from sqlalchemy import delete, select  # noqa: PLC0415
 
         from db.models import Forecast, Narrative  # noqa: PLC0415

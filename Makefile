@@ -107,6 +107,28 @@ seed:  ## Upload synthetic sales CSV to GCS (dev only)
 etl-local:  ## Run the Beam ETL with DirectRunner (local)
 	$(PYTHON) -m etl.beam_pipeline --runner DirectRunner
 
+.PHONY: spark-features-local
+spark-features-local:  ## Run PySpark feature engineering against data/sample_sales/ (fully offline)
+	$(VENV)/bin/python -m spark.feature_engineering \
+	  --input data/sample_sales/rossmann_cleaned.csv \
+	  --input-format csv \
+	  --output data/sample_sales/features/
+
+.PHONY: spark-features
+spark-features:  ## Run PySpark feature engineering locally against configured GCS paths (reads .env; local compute only, GCS I/O still applies)
+	$(VENV)/bin/python -m spark.feature_engineering \
+	  --input "$$($(VENV)/bin/python -c 'from config import get_settings; print(get_settings().gcs_spark_input_path)')" \
+	  --input-format csv \
+	  --output "$$($(VENV)/bin/python -c 'from config import get_settings; print(get_settings().gcs_spark_output_path)')"
+
+.PHONY: spark-features-gcp
+spark-features-gcp:  ## Submit PySpark feature engineering to a Dataproc cluster (bills GCP — never run for local dev)
+	gcloud dataproc jobs submit pyspark spark/feature_engineering.py \
+	  --cluster=retail-spark-cluster \
+	  --region=us-central1 \
+	  -- --input gs://$$GCS_BUCKET/sales/*.csv --input-format csv \
+	     --output gs://$$GCS_BUCKET/sales/features/
+
 # ── Docker ───────────────────────────────────────────────────────
 .PHONY: docker-build
 docker-build:  ## Build the production Docker image

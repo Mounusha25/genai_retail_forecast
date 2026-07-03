@@ -70,6 +70,19 @@ class BigQueryClient:
 
     # ── Public API ─────────────────────────────────────────────
 
+    def load_features_table(self, gcs_parquet_uri: str) -> None:
+        """Load the PySpark-engineered feature parquet output into `sales_features`."""
+        table_id = f"{self._project}.{self._dataset}.sales_features"
+        job_config = bigquery.LoadJobConfig(
+            source_format=bigquery.SourceFormat.PARQUET,
+            write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+            create_disposition=bigquery.CreateDisposition.CREATE_IF_NEEDED,
+        )
+        logger.info("Loading Spark feature output %s -> %s", gcs_parquet_uri, table_id)
+        job = self._client.load_table_from_uri(gcs_parquet_uri, table_id, job_config=job_config)
+        job.result()  # block until done
+        logger.info("Loaded %d rows into %s", job.output_rows, table_id)
+
     def create_view(self) -> None:
         logger.info("Creating/refreshing v_daily_sales view")
         self._run_query(_load_sql("create_view.sql", **self._placeholders()))
