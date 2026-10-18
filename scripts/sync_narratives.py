@@ -17,6 +17,9 @@ Usage
 
 # Custom batch size & worker concurrency
 .venv/bin/python scripts/sync_narratives.py --limit 50 --workers 2
+
+# Resume a batch without regenerating stores already persisted
+.venv/bin/python scripts/sync_narratives.py --limit 50 --skip-existing
 """
 
 from __future__ import annotations
@@ -36,7 +39,7 @@ from dotenv import load_dotenv  # type: ignore[import]
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -64,9 +67,12 @@ def _row_to_dict(row: Forecast) -> dict:
     }
 
 
-async def _fetch_product_ids(session: AsyncSession, limit: int) -> list[str]:
-    """Return up to *limit* distinct product_ids that have forecast rows."""
-    result = await session.execute(text(f"SELECT DISTINCT product_id FROM forecasts ORDER BY product_id LIMIT {limit}"))
+async def _fetch_product_ids(session: AsyncSession, limit: int, *, skip_existing: bool = False) -> list[str]:
+    """Return forecast product IDs, optionally excluding completed narratives."""
+    query = select(Forecast.product_id).distinct().order_by(Forecast.product_id).limit(limit)
+    if skip_existing:
+        query = query.outerjoin(Narrative, Narrative.product_id == Forecast.product_id).where(Narrative.id.is_(None))
+    result = await session.execute(query)
     return [row[0] for row in result.fetchall()]
 
 
@@ -118,6 +124,7 @@ async def sync(
     limit: int,
     workers: int,
     delay: float,
+    skip_existing: bool,
 ) -> None:
     cfg = get_settings()
     engine = create_async_engine(cfg.database_url, echo=False)
@@ -129,7 +136,7 @@ async def sync(
             product_ids = [product_id.upper()]
             logger.info("Single-store mode: %s", product_ids[0])
         else:
-            product_ids = await _fetch_product_ids(session, limit)
+            product_ids = await _fetch_product_ids(session, limit, skip_existing=skip_existing)
             logger.info("Found %d product_ids to process (limit=%d)", len(product_ids), limit)
 
     if not product_ids:
@@ -211,8 +218,13 @@ def main() -> None:
         default=1.0,
         help="Seconds to wait between launching Groq requests (default: 1.0).",
     )
+    parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="Skip stores that already have a saved narrative.",
+    )
     args = parser.parse_args()
-    asyncio.run(sync(args.product, args.limit, args.workers, args.delay))
+    asyncio.run(sync(args.product, args.limit, args.workers, args.delay, args.skip_existing))
 
 
 if __name__ == "__main__":

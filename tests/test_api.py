@@ -77,6 +77,19 @@ async def test_get_forecasts_not_found(client: AsyncClient):
     assert resp.status_code == 404
 
 
+@pytest.mark.asyncio
+async def test_dashboard_routes_are_registered(client: AsyncClient, db_session):
+    await _seed_forecast(db_session, "SKU-DASHBOARD")
+
+    stores = await client.get("/v1/dashboard/stores")
+    summary = await client.get("/v1/dashboard/fleet-summary")
+
+    assert stores.status_code == 200
+    assert "SKU-DASHBOARD" in stores.json()["stores"]
+    assert summary.status_code == 200
+    assert any(row["product_id"] == "SKU-DASHBOARD" for row in summary.json()["stores"])
+
+
 # ── Narratives ─────────────────────────────────────────────────
 
 

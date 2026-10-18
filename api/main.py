@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from api.routes.dashboard import router as dashboard_router
 from api.routes.forecasts import router as forecasts_router
 from api.routes.narratives import router as narratives_router
 from api.routes.pipeline import router as pipeline_router
@@ -88,6 +89,7 @@ def create_app() -> FastAPI:
     app.include_router(forecasts_router, prefix=api_prefix)
     app.include_router(narratives_router, prefix=api_prefix)
     app.include_router(pipeline_router, prefix=api_prefix)
+    app.include_router(dashboard_router, prefix=api_prefix)
 
     return app
 
