@@ -65,6 +65,7 @@ dev = [
   "pytest-cov>=5.0",
   "anyio>=4.4",
   "aiosqlite>=0.20",
+  "psycopg2-binary>=2.9",
   "ruff>=0.4",
   "mypy>=1.10",
   "types-setuptools",
