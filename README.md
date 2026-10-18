@@ -2,7 +2,7 @@
 
 # GenAI Retail Demand Forecasting Engine
 
-> **Production-grade ML system** that ingests raw retail sales, trains time-series forecasting models on BigQuery ML, and delivers 30-day demand forecasts through a FastAPI backend and a real-time Streamlit BI dashboard.
+> **Production-oriented ML system** that ingests retail sales, trains time-series forecasting models on BigQuery ML, evaluates rolling forecast quality gates, and delivers 30-day forecasts through FastAPI, Streamlit, and Next.js interfaces.
 
 ---
 
@@ -15,9 +15,10 @@
    - [1. ETL Pipeline (Apache Beam)](#1-etl-pipeline-apache-beam)
    - [2. Feature Engineering (PySpark)](#2-feature-engineering-pyspark)
    - [3. BigQuery ML Forecasting](#3-bigquery-ml-forecasting)
-   - [4. FastAPI Backend](#4-fastapi-backend)
-   - [5. Streamlit BI Dashboard](#5-streamlit-bi-dashboard)
-   - [6. PostgreSQL Data Store](#6-postgresql-data-store)
+   - [4. Forecast Quality Monitoring](#4-forecast-quality-monitoring)
+   - [5. FastAPI Backend](#5-fastapi-backend)
+   - [6. Streamlit BI Dashboard](#6-streamlit-bi-dashboard)
+   - [7. PostgreSQL Data Store](#7-postgresql-data-store)
 5. [Tech Stack](#tech-stack)
 6. [Project Structure](#project-structure)
 7. [Data Flow](#data-flow)
@@ -37,11 +38,25 @@ This project demonstrates a complete, end-to-end **MLOps + GenAI** pipeline buil
 |-------|-----------|---------|
 | Ingestion | Apache Beam → GCS → BigQuery | Clean and load raw sales CSVs |
 | Forecasting | BigQuery ML ARIMA_PLUS | Train and generate 30-day demand forecasts |
+| Monitoring | Rolling backtests + quality gates | Track error/bias and recommend retraining |
 | Backend API | FastAPI + asyncpg + PostgreSQL | Serve forecasts with async I/O |
-| Dashboard | Streamlit + Plotly | 5-tab real-time BI dashboard with 1,115-store fleet |
+| Dashboards | Streamlit + Plotly; Next.js | Explore the 1,115-store fleet and model evidence |
 | CI/CD | GitHub Actions + Cloud Run + WIF | Zero-downtime deploy on every semver tag |
 
 **Dataset**: Rossmann Store Sales — 1,115 stores across Germany, Aug–Sep 2015, 33,450 forecast rows, 24.81M total predicted units.
+
+### Measured model evidence
+
+`make monitor` runs four rolling, non-synthetic 30-day holdouts over all 1,115 stores and writes a machine-readable history plus a latest quality-gate decision. The checked-in run evaluates 33,450 rows per window:
+
+| Holdout end | MAE | MAPE | Bias | Gate |
+|---|---:|---:|---:|---|
+| 2015-05-02 | 2,571.89 | 18.86% | 14.91% | pass |
+| 2015-06-01 | 2,468.74 | 13.84% | 30.69% | fail — bias |
+| 2015-07-01 | 2,331.60 | 21.43% | 23.28% | fail — bias |
+| 2015-07-31 | 1,898.84 | 16.92% | 17.06% | pass |
+
+The gates are explicit: MAPE ≤ 25%, absolute bias ≤ 20%, and MAE regression versus the reference window ≤ 15%. Failed windows set `retrain_recommended=true`; the latest window passes. See `data/reports/monitoring_report.json` for the complete evidence.
 
 ---
 
@@ -54,6 +69,7 @@ The Streamlit dashboard provides five tabs of business intelligence:
 | 🌐 **Network Overview** | Fleet KPIs, daily demand trend, day-of-week patterns, Top-15 stores, store tier distribution (High/Mid/Low), volume histogram with P25/P50/P75 lines, weekly bar chart, risk-vs-volume scatter |
 | 📊 **Store Forecast** | Per-store 5 KPIs, forecast line + 80% CI band + peak marker, weekly bar, DOW pattern, benchmark bullet chart (vs P25/P50/P75/P90), week-over-week change, CSV export |
 | 🔀 **Compare** | Multi-store overlay chart, comparison summary table with percentile ranks across all 1,115 stores |
+| 🤖 **AI Narrative** | Retrieval-grounded store summaries with on-demand generation and persistence |
 | ℹ️ **About** | System architecture, tech stack, dataset info, quick-start guide |
 
 ```bash
@@ -240,7 +256,23 @@ The `ARIMA_PLUS` model automatically detects trend, seasonality, and holiday eff
 
 ---
 
-### 3. FastAPI Backend
+### 4. Forecast Quality Monitoring
+
+**Files:** `monitoring/quality_gate.py`, `scripts/monitor_forecasts.py`
+
+The monitoring job evaluates the same forecasting approach over multiple historical holdout windows instead of reporting only its best/latest score. It persists `monitoring_history.csv` and `monitoring_report.json`, records the model version and reference window, and makes retraining decisions from configurable MAPE, bias, and MAE-regression thresholds.
+
+```bash
+make monitor
+# Optional CI-style gate:
+.venv/bin/python scripts/monitor_forecasts.py --fail-on-gate
+```
+
+The latest report is also served at `GET /v1/dashboard/model-monitoring`.
+
+---
+
+### 5. FastAPI Backend
 
 **Files:** `api/main.py`, `api/routes/`, `api/schemas.py`, `api/dependencies.py`
 
@@ -258,6 +290,7 @@ A fully async REST API with production-grade features:
 ```
 GET  /health                    → {"status": "ok", "db": "ok", "version": "1.0.0"}
 GET  /v1/forecasts/{product_id} → ForecastsResponse (30 rows + CI bands)
+GET  /v1/dashboard/model-monitoring → rolling metrics + latest quality gate
 POST /v1/pipeline/run           → 202 Accepted (authenticated, async background job)
 GET  /docs                      → Swagger UI (dev only)
 GET  /redoc                     → ReDoc (dev only)
@@ -266,7 +299,7 @@ GET  /redoc                     → ReDoc (dev only)
 ---
 
 
-### 4. Streamlit BI Dashboard
+### 6. Streamlit BI Dashboard
 
 **File:** `streamlit_app.py`
 
@@ -279,7 +312,7 @@ A 1,200-line professional BI dashboard built with Streamlit + Plotly. Uses **dir
 
 
 
-### 5. PostgreSQL Data Store
+### 7. PostgreSQL Data Store
 
 **Fleet data (from PostgreSQL):**
 
@@ -364,6 +397,7 @@ genai_retail_forecasting/
 │   ├── routes/
 │   │   ├── forecasts.py        ← GET /v1/forecasts/{product_id}
 │   │   ├── narratives.py       ← GET /v1/narrative/{product_id}
+│   │   ├── dashboard.py        ← fleet metrics + monitoring evidence
 │   │   └── pipeline.py         ← POST /v1/pipeline/run (authenticated)
 │   ├── dependencies.py         ← DbSession dependency, auth guard
 │   └── schemas.py              ← Pydantic v2 request/response models
@@ -395,6 +429,9 @@ genai_retail_forecasting/
 ├── pipeline/
 │   └── orchestrator.py         ← Full pipeline coordinator (ETL → BQ → DB → LLM)
 │
+├── monitoring/
+│   └── quality_gate.py         ← versioned thresholds + retraining decision
+│
 ├── rag/
 │   ├── vector_store.py         ← Build/load FAISS index
 │   ├── narrative_chain.py      ← LangChain RAG → narrative generation
@@ -402,6 +439,8 @@ genai_retail_forecasting/
 │
 ├── scripts/
 │   ├── seed_data.py            ← Generate synthetic Rossmann-style sales data
+│   ├── baseline_compare.py      ← local holdout benchmark
+│   ├── monitor_forecasts.py     ← rolling quality-gate history
 │   ├── sync_forecasts.py       ← BQ → PostgreSQL forecast sync
 │   └── run_bqml.py             ← Execute BQ ML SQL files
 │
@@ -411,9 +450,11 @@ genai_retail_forecasting/
 │   └── test_etl.py             ← Beam pipeline unit tests
 │
 ├── data/
+│   ├── reports/                ← measured benchmark + monitoring artifacts
 │   └── sample_sales/           ← Small CSV for local dev/testing
 │
 ├── streamlit_app.py            ← 5-tab Streamlit BI dashboard
+├── frontend/                   ← Next.js dashboard client
 ├── docker-compose.yml          ← PostgreSQL + FastAPI services
 ├── Dockerfile                  ← Multi-stage build (builder + runtime)
 ├── Makefile                    ← All dev commands
@@ -443,6 +484,9 @@ Step 4  make sync-forecasts
 Step 5  Dashboard auto-refreshes
         Streamlit reads PostgreSQL directly (fleet analytics, @st.cache_data TTL=300s)
         FastAPI serves per-store forecasts on demand
+
+Step 6  make monitor
+        Rolling historical holdouts → quality gates → retraining recommendation
 ```
 
 This full pipeline can also be triggered via HTTP:
@@ -464,6 +508,7 @@ push / PR → Ruff lint → Ruff format check → mypy --strict → pytest (Post
                                                                │
                                                                └─► codecov coverage report
                                                                └─► Docker build validation
+                                                               └─► frontend audit + lint + build
 ```
 
 ### `deploy.yml` — Runs on semver tags (`v*.*.*`) or manual workflow dispatch
@@ -545,6 +590,7 @@ make etl-gcp          # Run Beam ETL on Dataflow (GCP billing)
 make bqml-train       # Train ARIMA_PLUS model in BigQuery
 make bqml-forecast    # Generate 30-day forecasts
 make sync-forecasts   # Sync BQ forecasts → PostgreSQL
+make monitor          # Rolling backtests + retraining quality gate
 ```
 
 ---
@@ -600,6 +646,10 @@ curl -X POST http://localhost:8080/v1/pipeline/run \
 # → 202 Accepted
 ```
 
+### `GET /v1/dashboard/model-monitoring`
+
+Returns the versioned rolling evaluation history, configured thresholds, latest pass/fail decision, violations, and `retrain_recommended` flag generated by `make monitor`.
+
 Interactive docs available at `http://localhost:8080/docs` (development mode).
 
 ---
@@ -610,7 +660,7 @@ Interactive docs available at `http://localhost:8080/docs` (development mode).
 Beam's unified programming model means the same pipeline code runs locally (`DirectRunner`) for free during development and on managed `Dataflow` in production with auto-scaling — no code changes needed.
 
 **Why BigQuery ML over a Python model?**
-ARIMA_PLUS in BQML trains one model *per product* (1,115+ models) automatically, in parallel, with zero infrastructure management. The same SQL call handles model versioning, training, forecasting, and evaluation.
+ARIMA_PLUS in BQML trains one time series *per product* (1,115 stores) automatically and in parallel with little infrastructure management. Separate SQL steps handle training, forecasting, and evaluation; the local monitoring layer records version labels and longitudinal quality evidence.
 
 **Why async FastAPI + asyncpg?**
 Async I/O allows the API to handle dozens of concurrent forecast requests without thread blocking. The connection pool (size=10, overflow=20) handles burst traffic from the Streamlit dashboard's parallel chart loads.

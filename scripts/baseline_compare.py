@@ -114,11 +114,17 @@ def compare_baselines(
     data_dir: Path = DATA_DIR,
     horizon_days: int = 30,
     num_stores: int | None = None,
+    holdout_end: pd.Timestamp | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     sales = load_sales(data_dir)
-    cutoff = sales["Date"].max() - pd.DateOffset(days=horizon_days)
+    evaluation_end = holdout_end if holdout_end is not None else sales["Date"].max()
+    evaluation_end = pd.Timestamp(evaluation_end)
+    cutoff = evaluation_end - pd.DateOffset(days=horizon_days)
     history = sales[sales["Date"] <= cutoff]
-    holdout = sales[sales["Date"] > cutoff]
+    holdout = sales[(sales["Date"] > cutoff) & (sales["Date"] <= evaluation_end)]
+
+    if history.empty or holdout.empty:
+        raise ValueError(f"No data available for holdout ending {evaluation_end.date()}")
 
     store_ids = sorted(holdout["Store"].unique())
     if num_stores:

@@ -99,6 +99,34 @@ class BaselineMetricsResponse(BaseModel):
     metrics: list[BaselineMetricRow]
 
 
+class MonitoringEvaluation(BaseModel):
+    model: str
+    model_version: str
+    window_start: date
+    window_end: date
+    sample_count: int = Field(..., ge=0)
+    store_count: int = Field(..., ge=0)
+    mae: float = Field(..., ge=0)
+    rmse: float = Field(..., ge=0)
+    mape_pct: float = Field(..., ge=0)
+    bias_pct: float
+    status: Literal["pass", "fail"]
+    retrain_recommended: bool
+    reference_mae: float = Field(..., ge=0)
+    mae_regression_pct: float
+    violations: list[str]
+
+
+class MonitoringReportResponse(BaseModel):
+    available: bool
+    generated_at: datetime
+    model_version: str
+    reference_window_end: date
+    gate_config: dict[str, float]
+    latest: MonitoringEvaluation
+    evaluations: list[MonitoringEvaluation]
+
+
 # ── Narratives ─────────────────────────────────────────────────
 
 

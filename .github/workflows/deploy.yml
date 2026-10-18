@@ -61,7 +61,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install ".[base,etl,rag,api,dev]"
+        run: pip install ".[base,analytics,etl,rag,api,dev]"
 
       - name: Ruff lint
         run: ruff check .
@@ -70,7 +70,7 @@ jobs:
         run: ruff format --check .
 
       - name: mypy
-        run: mypy api config db pipeline rag etl
+        run: mypy api config db monitoring pipeline rag etl
 
       - name: pytest
         run: pytest --tb=short

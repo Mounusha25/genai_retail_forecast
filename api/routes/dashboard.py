@@ -5,7 +5,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from sqlalchemy import distinct, func, select
 
 from api.dependencies import DbSession
@@ -18,6 +18,7 @@ from api.schemas import (
     DayOfWeekPatternRow,
     FleetSummaryResponse,
     FleetSummaryRow,
+    MonitoringReportResponse,
     NarrativeCoverageResponse,
     StoreListResponse,
     WeeklyFleetResponse,
@@ -28,6 +29,7 @@ from db.models import Forecast, Narrative
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 BASELINE_METRICS_PATH = Path(__file__).resolve().parents[2] / "data" / "reports" / "baseline_metrics.csv"
+MONITORING_REPORT_PATH = Path(__file__).resolve().parents[2] / "data" / "reports" / "monitoring_report.json"
 TOTAL_STORES = 1115
 DAY_ABBR = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -171,3 +173,10 @@ async def baseline_metrics() -> BaselineMetricsResponse:
             for row in csv.DictReader(fh)
         ]
     return BaselineMetricsResponse(count=len(metrics), metrics=metrics)
+
+
+@router.get("/model-monitoring", response_model=MonitoringReportResponse, summary="Forecast quality gate history")
+async def model_monitoring() -> MonitoringReportResponse:
+    if not MONITORING_REPORT_PATH.exists():
+        raise HTTPException(status_code=404, detail="Monitoring report not generated. Run `make monitor` first.")
+    return MonitoringReportResponse.model_validate_json(MONITORING_REPORT_PATH.read_text())

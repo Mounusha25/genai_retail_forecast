@@ -90,6 +90,17 @@ async def test_dashboard_routes_are_registered(client: AsyncClient, db_session):
     assert any(row["product_id"] == "SKU-DASHBOARD" for row in summary.json()["stores"])
 
 
+@pytest.mark.asyncio
+async def test_monitoring_report_is_served(client: AsyncClient):
+    response = await client.get("/v1/dashboard/model-monitoring")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["model_version"] == "local-seasonal-trend-v1"
+    assert len(payload["evaluations"]) == 4
+    assert payload["latest"]["status"] == "pass"
+
+
 # ── Narratives ─────────────────────────────────────────────────
 
 

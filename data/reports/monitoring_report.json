@@ -1,0 +1,102 @@
+{
+  "available": true,
+  "generated_at": "2026-10-18T21:29:51.253351+00:00",
+  "model_version": "local-seasonal-trend-v1",
+  "reference_window_end": "2015-05-02",
+  "gate_config": {
+    "max_mape_pct": 25.0,
+    "max_abs_bias_pct": 20.0,
+    "max_mae_regression_pct": 15.0
+  },
+  "latest": {
+    "model": "local_seasonal_trend",
+    "model_version": "local-seasonal-trend-v1",
+    "window_start": "2015-07-02",
+    "window_end": "2015-07-31",
+    "sample_count": 33450,
+    "store_count": 1115,
+    "mae": 1898.83604441579,
+    "rmse": 3033.176059134509,
+    "mape_pct": 16.916247096830066,
+    "bias_pct": 17.05536944739597,
+    "status": "pass",
+    "retrain_recommended": false,
+    "reference_mae": 2571.8895958276767,
+    "mae_regression_pct": -26.16961289877169,
+    "violations": []
+  },
+  "evaluations": [
+    {
+      "model": "local_seasonal_trend",
+      "model_version": "local-seasonal-trend-v1",
+      "window_start": "2015-04-03",
+      "window_end": "2015-05-02",
+      "sample_count": 33450,
+      "store_count": 1115,
+      "mae": 2571.8895958276767,
+      "rmse": 3681.681806382772,
+      "mape_pct": 18.86165526525067,
+      "bias_pct": 14.906662766253792,
+      "status": "pass",
+      "retrain_recommended": false,
+      "reference_mae": 2571.8895958276767,
+      "mae_regression_pct": 0.0,
+      "violations": []
+    },
+    {
+      "model": "local_seasonal_trend",
+      "model_version": "local-seasonal-trend-v1",
+      "window_start": "2015-05-03",
+      "window_end": "2015-06-01",
+      "sample_count": 33450,
+      "store_count": 1115,
+      "mae": 2468.741536847408,
+      "rmse": 4002.8715727629897,
+      "mape_pct": 13.843139723982972,
+      "bias_pct": 30.68748402801578,
+      "status": "fail",
+      "retrain_recommended": true,
+      "reference_mae": 2571.8895958276767,
+      "mae_regression_pct": -4.010594356289771,
+      "violations": [
+        "absolute bias 30.69% exceeds 20.00%"
+      ]
+    },
+    {
+      "model": "local_seasonal_trend",
+      "model_version": "local-seasonal-trend-v1",
+      "window_start": "2015-06-02",
+      "window_end": "2015-07-01",
+      "sample_count": 33450,
+      "store_count": 1115,
+      "mae": 2331.602379395233,
+      "rmse": 3485.71646062568,
+      "mape_pct": 21.433398862531217,
+      "bias_pct": 23.275712184104965,
+      "status": "fail",
+      "retrain_recommended": true,
+      "reference_mae": 2571.8895958276767,
+      "mae_regression_pct": -9.342827811203735,
+      "violations": [
+        "absolute bias 23.28% exceeds 20.00%"
+      ]
+    },
+    {
+      "model": "local_seasonal_trend",
+      "model_version": "local-seasonal-trend-v1",
+      "window_start": "2015-07-02",
+      "window_end": "2015-07-31",
+      "sample_count": 33450,
+      "store_count": 1115,
+      "mae": 1898.83604441579,
+      "rmse": 3033.176059134509,
+      "mape_pct": 16.916247096830066,
+      "bias_pct": 17.05536944739597,
+      "status": "pass",
+      "retrain_recommended": false,
+      "reference_mae": 2571.8895958276767,
+      "mae_regression_pct": -26.16961289877169,
+      "violations": []
+    }
+  ]
+}

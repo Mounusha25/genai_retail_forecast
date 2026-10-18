@@ -21,7 +21,7 @@ help:  ## Show this help message
 install:  ## Create venv and install all dependency groups
 	$(PYTHON) -m venv $(VENV)
 	$(PIP) install --upgrade pip
-	$(PIP) install -e ".[base,etl,rag,api,ui,dev]"
+	$(PIP) install -e ".[base,analytics,etl,rag,api,ui,dev]"
 
 .PHONY: env
 env:  ## Copy .env.example → .env (won't overwrite)
@@ -38,7 +38,7 @@ format:  ## Auto-format with Ruff
 
 .PHONY: typecheck
 typecheck:  ## Run mypy type checker
-	$(MYPY) api config db pipeline rag etl
+	$(MYPY) api config db monitoring pipeline rag etl
 
 .PHONY: check
 check: lint typecheck  ## Run lint + typecheck
@@ -75,6 +75,10 @@ sync-forecasts:  ## Pull forecasts from BigQuery into PostgreSQL
 .PHONY: sync-narratives
 sync-narratives:  ## Generate AI narratives and save to PostgreSQL (first 20 stores)
 	$(VENV)/bin/python scripts/sync_narratives.py --limit 20
+
+.PHONY: monitor
+monitor:  ## Run rolling forecast quality gates and write monitoring artifacts
+	$(VENV)/bin/python scripts/monitor_forecasts.py
 
 .PHONY: ui
 ui:  ## Launch the Streamlit demo UI (http://localhost:8501)
