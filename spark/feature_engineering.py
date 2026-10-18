@@ -12,7 +12,6 @@ Output is written back to GCS as parquet for BigQuery ML ingestion.
 
 import argparse
 import sys
-from typing import Optional
 
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
@@ -41,7 +40,7 @@ def engineer_features(
     spark: SparkSession,
     input_path: str,
     output_path: str,
-    sample_fraction: Optional[float] = None,
+    sample_fraction: float | None = None,
 ) -> None:
     """
     Read raw sales data, engineer time-series features, and write enriched output.
@@ -71,7 +70,7 @@ def engineer_features(
     # Optional sampling for testing
     if sample_fraction is not None:
         df = df.sample(fraction=sample_fraction, seed=42)
-        spark.logger.info(f"Sampled DataFrame to {sample_fraction*100:.1f}%")
+        spark.logger.info(f"Sampled DataFrame to {sample_fraction * 100:.1f}%")
 
     spark.logger.info(f"Input records: {df.count():,}")
 
@@ -79,14 +78,10 @@ def engineer_features(
     # 1. Rolling window aggregations
     # ────────────────────────────────────────────────────────────────
     window_7d = (
-        Window.partitionBy("product_id", "store_id")
-        .orderBy("date")
-        .rangeBetween(-6 * 86400, 0)  # 6 days in seconds
+        Window.partitionBy("product_id", "store_id").orderBy("date").rangeBetween(-6 * 86400, 0)  # 6 days in seconds
     )
     window_30d = (
-        Window.partitionBy("product_id", "store_id")
-        .orderBy("date")
-        .rangeBetween(-29 * 86400, 0)  # 29 days in seconds
+        Window.partitionBy("product_id", "store_id").orderBy("date").rangeBetween(-29 * 86400, 0)  # 29 days in seconds
     )
 
     df = df.withColumn("rolling_avg_units_7d", F.avg("units_sold").over(window_7d))
@@ -137,15 +132,13 @@ def engineer_features(
     # Write output
     df_clean.write.mode("overwrite").parquet(output_path)
 
-    spark.logger.info(f"✓ Feature engineering complete")
+    spark.logger.info("✓ Feature engineering complete")
     spark.logger.info(f"✓ Output written to: {output_path}")
 
 
 def main() -> None:
     """Entry point for PySpark feature engineering job."""
-    parser = argparse.ArgumentParser(
-        description="Engineer time-series features for retail forecasting"
-    )
+    parser = argparse.ArgumentParser(description="Engineer time-series features for retail forecasting")
     parser.add_argument(
         "--input",
         required=True,

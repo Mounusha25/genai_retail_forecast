@@ -71,6 +71,8 @@ dev = [
 [tool.ruff]
 line-length    = 120
 target-version = "py312"
+# notebooks are exploratory (undefined names across cells); they are not linted in CI
+extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
 select  = ["E", "F", "I", "UP", "B", "SIM", "S"]
